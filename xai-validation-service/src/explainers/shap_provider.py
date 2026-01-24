@@ -12,8 +12,8 @@ class HeartSHAPExplainer:
 
     def explain_diagnosis(self, patient_features: dict):
         """
-        Calculates feature importance using SHAP[cite: 374].
-        Identifies which features (e.g., BP, Troponin) influenced the decision[cite: 374].
+        Calculates feature importance using SHAP.
+        Identifies which features (e.g., BP, Troponin) influenced the decision.
         """
         df = pd.DataFrame([patient_features])
         shap_values = self.explainer(df)
