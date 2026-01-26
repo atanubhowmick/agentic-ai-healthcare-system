@@ -1,8 +1,9 @@
-fastapi
-uvicorn
+fastapi[standard]
 pydantic
-numpy
-pandas
-scikit-learn
-joblib
 langchain
+langchain-openai
+langchain-experimental
+pandas
+numpy
+scikit-learn
+python-dotenv

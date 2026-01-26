@@ -1,0 +1,9 @@
+fastapi[standard]
+shap
+langchain
+langchain-openai
+pandas
+numpy
+scikit-learn
+matplotlib
+python-dotenv

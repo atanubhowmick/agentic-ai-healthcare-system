@@ -16,7 +16,7 @@ class SystemMonitor:
         return latency
 
     def calculate_system_health(self, total_requests, failed_requests):
-        # Failure rates: Predictions failed by XAI or Human [cite: 436]
+        # Failure rates: Predictions failed by XAI or Human
         failure_rate = (failed_requests / total_requests) * 100 if total_requests > 0 else 0
         
         # Latency average

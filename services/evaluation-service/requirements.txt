@@ -1,0 +1,5 @@
+fastapi[standard]
+numpy
+scikit-learn
+matplotlib
+prometheus-client

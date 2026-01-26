@@ -1,0 +1,10 @@
+fastapi[standard]
+langchain
+langchain-openai
+chromadb
+pypdf
+pandas
+numpy
+scikit-learn
+python-dotenv
+tiktoken

@@ -15,8 +15,8 @@ tools = [
 
 # 2. Define the Specialist Prompt
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a specialized Cardiology AI Agent. Your goal is to provide diagnostic insights "
-               "based on heart-related data. Always be precise and cite the metrics used."),
+    ("system", """You are a specialized Cardiology AI Agent. Your goal is to provide diagnostic insights 
+               based on heart-related data. Always be precise and cite the metrics used."""),
     MessagesPlaceholder(variable_name="chat_history"),
     ("human", "{input}"),
     MessagesPlaceholder(variable_name="agent_scratchpad"),

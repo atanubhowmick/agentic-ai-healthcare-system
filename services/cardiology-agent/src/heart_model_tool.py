@@ -7,9 +7,9 @@ def get_heart_data_analysis(query: str):
     # Load heart-specific dataset
     df = pd.read_csv("data/heart_disease_data.csv") 
     
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    llm = ChatOpenAI(model = "gpt-4o", temperature = 0)
     
     # Create the specialized pandas agent
-    agent = create_pandas_dataframe_agent(llm, df, verbose=True, allow_dangerous_code=True)
+    agent = create_pandas_dataframe_agent(llm, df, verbose=True)
     
     return agent.run(query)
