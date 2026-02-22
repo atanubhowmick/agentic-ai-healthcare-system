@@ -13,11 +13,14 @@ async def diagnose_heart_condition(request: DiagnosisRequest):
     # Constructing the prompt for the agent
     query = f"Analyze patient {request.patient_id} with symptoms: {request.symptoms}. Check heart records for anomalies."
     
-    result = cardiology_executor.invoke({"input": query, "chat_history": []})
-    
+    result = cardiology_executor.invoke(
+        {"input": query},
+        config={"configurable": {"session_id": request.patient_id}}
+    )
+
     return {
         "agent": "Cardiology_Specialist",
-        "diagnosis": result["output"],
+        "diagnosis": result.content,
         "status": "Success"
     }
 
