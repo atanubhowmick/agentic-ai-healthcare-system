@@ -1,11 +1,10 @@
 {
-    "pythonVersion": "3.11",
-    "venvPath": ".",
-    "venv": "venv",
     "include": ["src"],
     "executionEnvironments": [
         {
             "root": "src"
         }
-    ]
+    ],
+    "typeCheckingMode": "basic",
+    "reportUnusedParameter": "none"
 }
