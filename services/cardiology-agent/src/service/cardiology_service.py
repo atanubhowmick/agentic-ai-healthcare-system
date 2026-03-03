@@ -2,7 +2,7 @@ import json
 from agent.cardiology_agent import cardiology_executor
 from datamodel.models import DiagnosisRequest, DiagnosisResult, DiagnosisResponse
 from exception.exceptions import LLMInvocationException, LLMResponseParseException
-from constants import CARDIOLOGY_AGENT_ID
+from constant.constants import CARDIOLOGY_AGENT_ID
 from log.logger import logger
 
 
