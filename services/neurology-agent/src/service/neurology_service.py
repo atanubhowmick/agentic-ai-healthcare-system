@@ -1,6 +1,6 @@
 import json
-from agent.cardiology_agent import cardiology_executor
-from datamodel.models import DiagnosisRequest, DiagnosisResult, DiagnosisResponse
+from agent.neurology_agent import neurology_executor
+from datamodel.models import NeurologyRequest, NeurologyResult, NeurologyResponse
 from exception.exceptions import LLMInvocationException, LLMResponseParseException
 from log.logger import logger
 
@@ -14,20 +14,20 @@ def _parse_llm_json(content: str) -> dict:
     return json.loads(content.strip())
 
 
-def diagnose(request: DiagnosisRequest) -> DiagnosisResponse:
+def diagnose(request: NeurologyRequest) -> NeurologyResponse:
     if request.is_followup:
         query = request.symptoms
         logger.debug("Follow-up query for patient %s: %s", request.patient_id, query)
     else:
         query = (
-            f"Analyze patient {request.patient_id} with symptoms: {request.symptoms}. "
-            "Check for cardiac anomalies and respond strictly in the requested JSON format."
+            f"Analyze patient {request.patient_id} with neurological symptoms: {request.symptoms}. "
+            "Assess for neurological anomalies and respond strictly in the requested JSON format."
         )
         logger.debug("Initial query for patient %s: %s", request.patient_id, query)
 
     try:
-        logger.debug("Invoking cardiology executor for patient: %s", request.patient_id)
-        result = cardiology_executor.invoke(
+        logger.debug("Invoking neurology executor for patient: %s", request.patient_id)
+        result = neurology_executor.invoke(
             {"input": query},
             config={"configurable": {"session_id": request.patient_id}}
         )
@@ -38,14 +38,14 @@ def diagnose(request: DiagnosisRequest) -> DiagnosisResponse:
 
     try:
         raw = _parse_llm_json(result.content)
-        diagnosis = DiagnosisResult(**raw)
+        diagnosis = NeurologyResult(**raw)
         logger.debug("LLM response parsed successfully for patient %s | severity: %s",
                      request.patient_id, diagnosis.severity)
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         raise LLMResponseParseException(message=f"Failed to parse LLM response for patient {request.patient_id}: {e}")
 
-    return DiagnosisResponse(
-        agent="Cardiology_Specialist",
-        agent_id='CARDIOLOGY-AGENT-1001',
+    return NeurologyResponse(
+        agent="Neurology_Specialist",
+        agent_id='NEURO-AGENT-1001',
         diagnosis=diagnosis
     )

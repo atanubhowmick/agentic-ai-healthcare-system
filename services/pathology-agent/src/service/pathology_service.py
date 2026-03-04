@@ -1,5 +1,5 @@
 import json
-from agent.cardiology_agent import cardiology_executor
+from agent.pathology_agent import pathology_executor
 from datamodel.models import DiagnosisRequest, DiagnosisResult, DiagnosisResponse
 from exception.exceptions import LLMInvocationException, LLMResponseParseException
 from log.logger import logger
@@ -20,14 +20,15 @@ def diagnose(request: DiagnosisRequest) -> DiagnosisResponse:
         logger.debug("Follow-up query for patient %s: %s", request.patient_id, query)
     else:
         query = (
-            f"Analyze patient {request.patient_id} with symptoms: {request.symptoms}. "
-            "Check for cardiac anomalies and respond strictly in the requested JSON format."
+            f"Analyze lab results for patient {request.patient_id}. "
+            f"Details: {request.symptoms}. "
+            "Identify any abnormalities in biomarkers and respond strictly in the requested JSON format."
         )
         logger.debug("Initial query for patient %s: %s", request.patient_id, query)
 
     try:
-        logger.debug("Invoking cardiology executor for patient: %s", request.patient_id)
-        result = cardiology_executor.invoke(
+        logger.debug("Invoking pathology executor for patient: %s", request.patient_id)
+        result = pathology_executor.invoke(
             {"input": query},
             config={"configurable": {"session_id": request.patient_id}}
         )
@@ -45,7 +46,7 @@ def diagnose(request: DiagnosisRequest) -> DiagnosisResponse:
         raise LLMResponseParseException(message=f"Failed to parse LLM response for patient {request.patient_id}: {e}")
 
     return DiagnosisResponse(
-        agent="Cardiology_Specialist",
-        agent_id='CARDIOLOGY-AGENT-1001',
+        agent="Pathology_Specialist",
+        agent_id="PATHOLOGY-AGENT-1001",
         diagnosis=diagnosis
     )

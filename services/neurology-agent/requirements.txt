@@ -2,8 +2,5 @@ fastapi[standard]
 pydantic
 langchain
 langchain-openai
-langchain-experimental
-pandas
-numpy
-scikit-learn
+langchain-community
 python-dotenv
