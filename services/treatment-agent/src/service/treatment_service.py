@@ -1,7 +1,7 @@
 import json
 from agent.treatment_agent import treatment_executor
 from datamodel.models import TreatmentRequest, TreatmentResult, TreatmentResponse
-from exception.exceptions import LLMInvocationException, LLMResponseParseException
+from exception.exceptions import TreatmentSvcException
 from log.logger import logger
 
 
@@ -38,8 +38,8 @@ def recommend(request: TreatmentRequest) -> TreatmentResponse:
             request.patient_id, len(result.content),
         )
     except Exception as e:
-        raise LLMInvocationException(
-            message=f"LLM call failed for patient {request.patient_id}: {e}"
+        raise TreatmentSvcException(
+            error_code="LLM_INVOCATION_ERROR", message=f"LLM call failed for patient {request.patient_id}: {e}"
         )
 
     try:
@@ -50,8 +50,8 @@ def recommend(request: TreatmentRequest) -> TreatmentResponse:
             request.patient_id, treatment.urgency,
         )
     except (json.JSONDecodeError, KeyError, ValueError) as e:
-        raise LLMResponseParseException(
-            message=f"Failed to parse LLM response for patient {request.patient_id}: {e}"
+        raise TreatmentSvcException(
+            error_code="LLM_RESPONSE_PARSE_ERROR", message=f"Failed to parse LLM response for patient {request.patient_id}: {e}"
         )
 
     return TreatmentResponse(
