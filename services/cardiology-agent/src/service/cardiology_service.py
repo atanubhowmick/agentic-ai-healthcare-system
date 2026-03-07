@@ -1,7 +1,7 @@
 import json
 from agent.cardiology_agent import cardiology_executor
 from datamodel.models import DiagnosisRequest, DiagnosisResult, DiagnosisResponse
-from exception.exceptions import LLMInvocationException, LLMResponseParseException
+from exception.exceptions import CardiologySvcException
 from log.logger import logger
 
 
@@ -34,7 +34,7 @@ def diagnose(request: DiagnosisRequest) -> DiagnosisResponse:
         logger.debug("LLM response received for patient %s | content length: %d chars",
                      request.patient_id, len(result.content))
     except Exception as e:
-        raise LLMInvocationException(message=f"LLM call failed for patient {request.patient_id}: {e}")
+        raise CardiologySvcException(error_code="LLM_INVOCATION_ERROR", message=f"LLM call failed for patient {request.patient_id}: {e}")
 
     try:
         raw = _parse_llm_json(result.content)
@@ -42,7 +42,7 @@ def diagnose(request: DiagnosisRequest) -> DiagnosisResponse:
         logger.debug("LLM response parsed successfully for patient %s | severity: %s",
                      request.patient_id, diagnosis.severity)
     except (json.JSONDecodeError, KeyError, ValueError) as e:
-        raise LLMResponseParseException(message=f"Failed to parse LLM response for patient {request.patient_id}: {e}")
+        raise CardiologySvcException(error_code="LLM_RESPONSE_PARSE_ERROR", message=f"Failed to parse LLM response for patient {request.patient_id}: {e}")
 
     return DiagnosisResponse(
         agent="Cardiology_Specialist",
