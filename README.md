@@ -306,28 +306,29 @@ All services return a consistent error envelope on failure.
 
 ## Running Locally
 
-Each service is a standalone FastAPI application. Run from the service's `src/` directory:
+Each service is a standalone FastAPI application. Run from the service's root directory:
 
 ```bash
-# Cardiology Agent
-cd services/cardiology-agent/src
-uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 
-# Neurology Agent
-cd services/neurology-agent/src
-uvicorn main:app --host 0.0.0.0 --port 8002 --reload
 
-# Pathology Agent
-cd services/pathology-agent/src
-uvicorn main:app --host 0.0.0.0 --port 8011 --reload
+# Step-1: # Go to respective service's directory. Example for Cardiology agent go to 'services/cardiology-agent'
+cd services/cardiology-agent
 
-# Treatment Agent
-cd services/treatment-agent/src
-uvicorn main:app --host 0.0.0.0 --port 8012 --reload
+# Step-2: Create the virtual environment
+python -m venv venv
 
-# XAI Validation Service
-cd xai-validation-service/src
-uvicorn main:app --host 0.0.0.0 --port 8016 --reload
+# Step-3: Activate the virtual environment
+source venv/Scripts/activate
+
+# Step-4: Install the required libraries
+pip install -r requirements.txt
+
+# Step-5: Run using the SH file (Need GitBash)
+bash run.sh
+
+# Step-5 (Alternate) : Using Uvicorn
+uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8001 --reload
+
 ```
 
 ### Environment Variables
