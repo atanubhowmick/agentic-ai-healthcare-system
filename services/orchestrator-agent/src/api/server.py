@@ -36,6 +36,8 @@ def _build_initial_state(patient_id: str, symptoms: str) -> dict:
         "treatment_xai_result": None,
         "requires_human_review": False,
         "human_review_reason": "",
+        "chroma_cache_hit": False,
+        "chroma_cached_result": None,
         "final_response": None,
     }
 

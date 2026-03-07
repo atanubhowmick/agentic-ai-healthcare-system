@@ -2,8 +2,13 @@
 LangGraph node implementations for the Healthcare Orchestrator.
 
 Node execution order (happy path):
-  triage → specialist → [secondary_check → conflict_check] → xai_diagnosis_validator
-         → treatment → xai_treatment_validator → finish
+  chroma_lookup → triage → specialist → [secondary_check → conflict_check]
+  → xai_diagnosis_validator → treatment → xai_treatment_validator → finish
+
+ChromaDB integration:
+  - chroma_lookup_node  : first node — returns cached treatment if similarity >= threshold
+  - xai_diagnosis_validator_node : saves validated diagnosis to ChromaDB (non-blocking)
+  - xai_treatment_validator_node : saves validated treatment to ChromaDB (non-blocking)
 
 Retry loops:
   - xai_diagnosis_validator → specialist (max MAX_RETRY times, then human review)
@@ -15,18 +20,24 @@ Conflict / human review:
 """
 
 import json
+import asyncio
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from agents.state import AgentState
 from tools.cardiology_client import call_cardiology_api
 from tools.neurology_client import call_neurology_api
 from tools.pathology_client import call_pathology_api
+from tools.cancer_client import call_cancer_api
 from tools.treatment_client import call_treatment_api
 from tools.xai_client import call_validate_diagnosis, call_validate_treatment
 from core.config import MAX_RETRY_COUNT
 from core.mongo_client import save_case
+from core.chroma_client import (
+    lookup_treatment_recommendation,
+    save_diagnosis_outcome,
+    save_treatment_outcome,
+)
 from log.logger import logger
-import asyncio
 
 _llm = ChatOpenAI(model="gpt-5.2", temperature=0)
 
@@ -39,11 +50,12 @@ Triage patient symptoms and route to the most appropriate medical specialist.
 Available specialists:
 - cardiology  : heart/cardiovascular symptoms (chest pain, palpitations, hypertension, shortness of breath with cardiac indicators, arrhythmia)
 - neurology   : neurological symptoms (headaches, seizures, memory loss, tremors, numbness, paralysis, dizziness, cognitive decline)
-- pathology   : lab/test-result queries, blood disorders, metabolic issues, infections without a clear cardiac or neurological focus
+- cancer      : oncology symptoms (unexplained weight loss, persistent lumps/masses, abnormal bleeding, chronic fatigue with suspected malignancy, elevated tumour markers)
+- pathology   : lab/test-result queries, blood disorders, metabolic issues, infections without a clear cardiac, neurological, or oncological focus
 
 Also determine whether a secondary pathology cross-check is warranted:
-Set secondary_check_needed=true when the case involves cardiology or neurology AND
-the symptoms suggest significant lab abnormalities (e.g. elevated enzymes, abnormal CBC).
+Set secondary_check_needed=true when the case involves cardiology, neurology, or cancer AND
+the symptoms suggest significant lab abnormalities (e.g. elevated enzymes, abnormal CBC, high tumour markers).
 
 Respond ONLY with valid JSON (no markdown):
 {{
@@ -51,7 +63,7 @@ Respond ONLY with valid JSON (no markdown):
     "secondary_check_needed": false,
     "reasoning": "one-sentence rationale"
 }}
-specialist must be one of: cardiology, neurology, pathology, unknown"""),
+specialist must be one of: cardiology, neurology, cancer, pathology, unknown"""),
     ("human", "Patient symptoms: {symptoms}"),
 ])
 
@@ -96,13 +108,70 @@ def _parse_json(content: str) -> dict:
 def _diagnosis_summary(diagnosis: dict) -> str:
     return (
         diagnosis.get("diagnosysDetails") or   # cardiology (original typo preserved)
-        diagnosis.get("diagnosisDetails") or   # neurology
+        diagnosis.get("diagnosisDetails") or   # neurology / cancer
         diagnosis.get("analysisDetails") or    # pathology
         str(diagnosis)
     )
 
 
 # ── Nodes ────────────────────────────────────────────────────────────────────
+
+async def chroma_lookup_node(state: AgentState) -> dict:
+    """
+    First node in the pipeline (step 2.1).
+    Searches ChromaDB treatment_outcomes for a semantically similar prior case.
+    On cache hit, builds a pre-filled final_response and short-circuits to finish.
+    """
+    symptoms = state.get("symptoms", "")
+    patient_id = state.get("patient_id", "UNKNOWN")
+
+    logger.info("[CHROMA_LOOKUP] Checking cache | patient: %s", patient_id)
+
+    hit, cached = await lookup_treatment_recommendation(symptoms)
+
+    if hit:
+        score = cached.get("similarity_score", 0.0)
+        specialist = cached.get("specialist_agent", "Unknown")
+        logger.info("[CHROMA_LOOKUP] Cache hit | patient: %s | similarity: %.4f", patient_id, score)
+
+        final_response = {
+            "patient_id": patient_id,
+            "status": "COMPLETED_FROM_CACHE",
+            "specialist_agent": specialist,
+            "diagnosis": {
+                "summary": cached.get("diagnosis_summary", "Cached result — see treatment"),
+                "severity": "N/A",
+                "emergency_care_needed": "N/A",
+                "hospitalization_needed": "N/A",
+                "full_details": {},
+            },
+            "xai_diagnosis_validation": None,
+            "treatment": cached.get("treatment"),
+            "xai_treatment_validation": None,
+            "conflict_detected": False,
+            "conflict_reason": "",
+            "human_review_reason": None,
+            "audit_trail": [
+                f"[CHROMA_LOOKUP] Cache hit (similarity={score}) "
+                "— returning cached treatment recommendation"
+            ],
+        }
+        return {
+            "chroma_cache_hit": True,
+            "chroma_cached_result": cached,
+            "final_response": final_response,
+            "messages": [
+                f"[CHROMA_LOOKUP] Cache hit | similarity: {score} — skipping full diagnosis pipeline"
+            ],
+        }
+
+    logger.info("[CHROMA_LOOKUP] No cache hit | patient: %s — proceeding with full pipeline", patient_id)
+    return {
+        "chroma_cache_hit": False,
+        "chroma_cached_result": None,
+        "messages": ["[CHROMA_LOOKUP] No cache hit — proceeding with full diagnosis flow"],
+    }
+
 
 async def triage_node(state: AgentState) -> dict:
     """LLM-based medical triage: determines specialist and secondary check need."""
@@ -116,7 +185,7 @@ async def triage_node(state: AgentState) -> dict:
         secondary_needed = bool(raw.get("secondary_check_needed", False))
         reasoning = raw.get("reasoning", "")
 
-        if specialist not in ("cardiology", "neurology", "pathology"):
+        if specialist not in ("cardiology", "neurology", "cancer", "pathology"):
             specialist = "unknown"
 
         logger.info("[TRIAGE] → %s | secondary: %s | reason: %s", specialist, secondary_needed, reasoning)
@@ -138,7 +207,7 @@ async def triage_node(state: AgentState) -> dict:
 
 
 async def specialist_node(state: AgentState) -> dict:
-    """Dispatch to the appropriate specialist agent via HTTP."""
+    """Dispatch to the appropriate specialist agent via HTTP (step 2.2)."""
     patient_id = state["patient_id"]
     symptoms = state["symptoms"]
     specialist = state["assigned_specialist"]
@@ -157,6 +226,9 @@ async def specialist_node(state: AgentState) -> dict:
         elif specialist == "pathology":
             data = await call_pathology_api(patient_id, symptoms, is_followup)
             agent_name = "Pathology_Specialist"
+        elif specialist == "cancer":
+            data = await call_cancer_api(patient_id, symptoms, is_followup)
+            agent_name = "Cancer_Oncology_Specialist"
         else:
             return {
                 "requires_human_review": True,
@@ -290,7 +362,7 @@ async def conflict_check_node(state: AgentState) -> dict:
                     f"Conflicting diagnoses between {primary_agent} and {secondary_agent}. "
                     f"Reason: {reason}"
                 ),
-                "messages": [f"[CONFLICT_CHECK] ⚠ Conflict detected: {reason}"],
+                "messages": [f"[CONFLICT_CHECK] Conflict detected: {reason}"],
             }
 
         logger.info("[CONFLICT_CHECK] No conflict.")
@@ -310,7 +382,11 @@ async def conflict_check_node(state: AgentState) -> dict:
 
 
 async def xai_diagnosis_validator_node(state: AgentState) -> dict:
-    """Validate the specialist diagnosis via the XAI service (retry loop #1)."""
+    """
+    Validate specialist diagnosis via XAI service — retry loop #1 (step 2.3 / 2.4).
+    On successful validation, saves diagnosis outcome to ChromaDB (step 2.4.1).
+    On max retries, triggers human review (step 2.4.3).
+    """
     patient_id = state["patient_id"]
     symptoms = state["symptoms"]
     diagnosis = state.get("specialist_diagnosis", {})
@@ -327,38 +403,51 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
         new_retry = attempt  # attempt already = old_count + 1
 
         if is_validated:
-            logger.info("[XAI_DIAGNOSIS] ✓ Validated | patient: %s", patient_id)
+            logger.info("[XAI_DIAGNOSIS] Validated | patient: %s", patient_id)
+            # Step 2.4.1: Save validated diagnosis to ChromaDB (fire-and-forget)
+            asyncio.create_task(save_diagnosis_outcome(
+                patient_id=patient_id,
+                symptoms=symptoms,
+                specialist_agent=specialist_agent,
+                diagnosis=diagnosis,
+            ))
             return {
                 "diagnosis_validated": True,
                 "diagnosis_retry_count": new_retry,
                 "diagnosis_xai_result": payload,
-                "messages": [f"[XAI_DIAGNOSIS] ✓ Validated on attempt {attempt}"],
+                "messages": [
+                    f"[XAI_DIAGNOSIS] Validated on attempt {attempt} — diagnosis saved to ChromaDB"
+                ],
             }
 
         # Validation failed
         if new_retry >= MAX_RETRY_COUNT:
-            logger.warning("[XAI_DIAGNOSIS] ✗ Max retries reached | patient: %s", patient_id)
+            # Step 2.4.3: Max retries — human intervention needed
+            logger.warning("[XAI_DIAGNOSIS] Max retries reached | patient: %s", patient_id)
             return {
                 "diagnosis_validated": False,
                 "diagnosis_retry_count": new_retry,
                 "diagnosis_xai_result": payload,
                 "requires_human_review": True,
                 "human_review_reason": (
-                    f"Diagnosis XAI validation failed after {new_retry} attempts. "
+                    f"Diagnosis failed XAI validation after {new_retry} attempts — "
+                    "human intervention needed. "
                     f"Summary: {payload.get('result', {}).get('validation_summary', 'N/A')}"
                 ),
                 "messages": [
-                    f"[XAI_DIAGNOSIS] ✗ Validation failed — max retries ({MAX_RETRY_COUNT}) reached."
+                    f"[XAI_DIAGNOSIS] Validation failed — max retries ({MAX_RETRY_COUNT}) reached. "
+                    "Diagnosis failed, human intervention needed."
                 ],
             }
 
-        logger.info("[XAI_DIAGNOSIS] ✗ Validation failed | attempt: %d — retrying specialist", attempt)
+        # Step 2.4.2: Retry specialist
+        logger.info("[XAI_DIAGNOSIS] Validation failed | attempt: %d — retrying specialist", attempt)
         return {
             "diagnosis_validated": False,
             "diagnosis_retry_count": new_retry,
             "diagnosis_xai_result": payload,
             "messages": [
-                f"[XAI_DIAGNOSIS] ✗ Validation failed (attempt {attempt}) — retrying specialist."
+                f"[XAI_DIAGNOSIS] Validation failed (attempt {attempt}) — retrying specialist."
             ],
         }
 
@@ -371,8 +460,13 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
                 "diagnosis_retry_count": new_retry,
                 "diagnosis_xai_result": None,
                 "requires_human_review": True,
-                "human_review_reason": f"XAI diagnosis service error after {new_retry} attempts: {str(e)}",
-                "messages": [f"[XAI_DIAGNOSIS] Service error — max retries reached."],
+                "human_review_reason": (
+                    f"XAI diagnosis service error after {new_retry} attempts: {str(e)} — "
+                    "human intervention needed."
+                ),
+                "messages": [
+                    "[XAI_DIAGNOSIS] Service error — max retries reached. Human intervention needed."
+                ],
             }
         return {
             "diagnosis_validated": False,
@@ -383,7 +477,7 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
 
 
 async def treatment_node(state: AgentState) -> dict:
-    """Invoke the treatment agent to generate a care plan."""
+    """Invoke the treatment agent to generate a care plan (step 2.4.1 / 2.5)."""
     patient_id = state["patient_id"]
     diagnosis = state.get("specialist_diagnosis", {})
     specialist_agent = state.get("specialist_agent", "Unknown_Specialist")
@@ -427,8 +521,13 @@ async def treatment_node(state: AgentState) -> dict:
 
 
 async def xai_treatment_validator_node(state: AgentState) -> dict:
-    """Validate the treatment recommendation via the XAI service (retry loop #2)."""
+    """
+    Validate treatment recommendation via XAI service — retry loop #2 (step 2.5 / 2.6).
+    On successful validation, saves treatment outcome to ChromaDB (step 2.6.1).
+    On max retries, triggers human review (step 2.6.2).
+    """
     patient_id = state["patient_id"]
+    symptoms = state["symptoms"]
     diagnosis = state.get("specialist_diagnosis", {})
     treatment = state.get("treatment_recommendation") or {}
     attempt = state.get("treatment_retry_count", 0) + 1
@@ -455,37 +554,51 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
         new_retry = attempt
 
         if is_validated:
-            logger.info("[XAI_TREATMENT] ✓ Validated | patient: %s", patient_id)
+            logger.info("[XAI_TREATMENT] Validated | patient: %s", patient_id)
+            # Step 2.6.1: Save validated treatment to ChromaDB (fire-and-forget)
+            asyncio.create_task(save_treatment_outcome(
+                patient_id=patient_id,
+                symptoms=symptoms,
+                specialist_agent=state.get("specialist_agent", "Unknown_Specialist"),
+                diagnosis=diagnosis,
+                treatment=treatment_obj,
+            ))
             return {
                 "treatment_validated": True,
                 "treatment_retry_count": new_retry,
                 "treatment_xai_result": payload,
-                "messages": [f"[XAI_TREATMENT] ✓ Validated on attempt {attempt}"],
+                "messages": [
+                    f"[XAI_TREATMENT] Validated on attempt {attempt} — treatment saved to ChromaDB"
+                ],
             }
 
         if new_retry >= MAX_RETRY_COUNT:
-            logger.warning("[XAI_TREATMENT] ✗ Max retries reached | patient: %s", patient_id)
+            # Step 2.6.2: Max retries — human intervention needed
+            logger.warning("[XAI_TREATMENT] Max retries reached | patient: %s", patient_id)
             return {
                 "treatment_validated": False,
                 "treatment_retry_count": new_retry,
                 "treatment_xai_result": payload,
                 "requires_human_review": True,
                 "human_review_reason": (
-                    f"Treatment XAI validation failed after {new_retry} attempts. "
+                    f"Treatment recommendation failed XAI validation after {new_retry} attempts — "
+                    "human intervention needed. "
                     f"Summary: {payload.get('result', {}).get('validation_summary', 'N/A')}"
                 ),
                 "messages": [
-                    f"[XAI_TREATMENT] ✗ Validation failed — max retries ({MAX_RETRY_COUNT}) reached."
+                    f"[XAI_TREATMENT] Validation failed — max retries ({MAX_RETRY_COUNT}) reached. "
+                    "Treatment recommendation failed, human intervention needed."
                 ],
             }
 
-        logger.info("[XAI_TREATMENT] ✗ Validation failed | attempt: %d — retrying treatment", attempt)
+        # Step 2.6.2: Retry treatment agent
+        logger.info("[XAI_TREATMENT] Validation failed | attempt: %d — retrying treatment", attempt)
         return {
             "treatment_validated": False,
             "treatment_retry_count": new_retry,
             "treatment_xai_result": payload,
             "messages": [
-                f"[XAI_TREATMENT] ✗ Validation failed (attempt {attempt}) — retrying treatment."
+                f"[XAI_TREATMENT] Validation failed (attempt {attempt}) — retrying treatment."
             ],
         }
 
@@ -498,8 +611,13 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
                 "treatment_retry_count": new_retry,
                 "treatment_xai_result": None,
                 "requires_human_review": True,
-                "human_review_reason": f"XAI treatment service error after {new_retry} attempts: {str(e)}",
-                "messages": [f"[XAI_TREATMENT] Service error — max retries reached."],
+                "human_review_reason": (
+                    f"XAI treatment service error after {new_retry} attempts: {str(e)} — "
+                    "human intervention needed."
+                ),
+                "messages": [
+                    "[XAI_TREATMENT] Service error — max retries reached. Human intervention needed."
+                ],
             }
         return {
             "treatment_validated": False,
@@ -512,9 +630,21 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
 async def finish_node(state: AgentState) -> dict:
     """
     Assemble the final response and persist to MongoDB.
-    This node is the terminal node — reached on success OR human-review.
+    Terminal node — reached on success, cache hit, or human-review.
+    When chroma_cache_hit=True the final_response is already pre-filled.
     """
     patient_id = state.get("patient_id", "UNKNOWN")
+
+    # Cache-hit path: final_response already built by chroma_lookup_node
+    if state.get("chroma_cache_hit"):
+        final_response = state.get("final_response") or {}
+        logger.info(
+            "[FINISH] Cache-hit path | patient: %s | status: %s",
+            patient_id, final_response.get("status"),
+        )
+        asyncio.create_task(save_case(final_response))
+        return {"final_response": final_response}
+
     requires_review = state.get("requires_human_review", False)
     diagnosis = state.get("specialist_diagnosis") or {}
 
