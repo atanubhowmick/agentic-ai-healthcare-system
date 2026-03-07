@@ -1,80 +1,547 @@
-import logging
+"""
+LangGraph node implementations for the Healthcare Orchestrator.
+
+Node execution order (happy path):
+  triage → specialist → [secondary_check → conflict_check] → xai_diagnosis_validator
+         → treatment → xai_treatment_validator → finish
+
+Retry loops:
+  - xai_diagnosis_validator → specialist (max MAX_RETRY times, then human review)
+  - xai_treatment_validator → treatment   (max MAX_RETRY times, then human review)
+
+Conflict / human review:
+  - conflict_check → finish (if conflict detected)
+  - any node can set requires_human_review=True → finish node collects it
+"""
+
+import json
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
-from src.agents.state import AgentState
-from src.tools.cardiology_client import call_cardiology_api
+from langchain_core.prompts import ChatPromptTemplate
+from agents.state import AgentState
+from tools.cardiology_client import call_cardiology_api
+from tools.neurology_client import call_neurology_api
+from tools.pathology_client import call_pathology_api
+from tools.treatment_client import call_treatment_api
+from tools.xai_client import call_validate_diagnosis, call_validate_treatment
+from core.config import MAX_RETRY_COUNT
+from core.mongo_client import save_case
+from log.logger import logger
+import asyncio
 
-# Initialize the LLM for the Master Router
-# This supports autonomous reasoning and independent decision-making
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
-logger = logging.getLogger(__name__)
+_llm = ChatOpenAI(model="gpt-5.2", temperature=0)
 
-async def master_router_node(state: AgentState):
-    """
-    The Supervisor/Router Agent.
-    Analyzes patient data/symptoms and directs flow to the correct medical specialist.
-    """
-    symptoms = state.get('symptoms', "")
-    
-    # Prompting the LLM to act as a triage supervisor
-    prompt = (
-        f"You are the Master Orchestrator for an Agentic Healthcare Framework. "
-        f"Analyze these patient symptoms: '{symptoms}'. "
-        "Determine the most relevant specialist for diagnosis. "
-        "Options: 'cardiology', 'chronic_disease', 'pathology', or 'finish' if data is insufficient. "
-        "Respond with only the lower-case specialist name."
+# ── Prompts ──────────────────────────────────────────────────────────────────
+
+_TRIAGE_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", """You are the Master Orchestrator for an Agentic Healthcare Framework.
+Triage patient symptoms and route to the most appropriate medical specialist.
+
+Available specialists:
+- cardiology  : heart/cardiovascular symptoms (chest pain, palpitations, hypertension, shortness of breath with cardiac indicators, arrhythmia)
+- neurology   : neurological symptoms (headaches, seizures, memory loss, tremors, numbness, paralysis, dizziness, cognitive decline)
+- pathology   : lab/test-result queries, blood disorders, metabolic issues, infections without a clear cardiac or neurological focus
+
+Also determine whether a secondary pathology cross-check is warranted:
+Set secondary_check_needed=true when the case involves cardiology or neurology AND
+the symptoms suggest significant lab abnormalities (e.g. elevated enzymes, abnormal CBC).
+
+Respond ONLY with valid JSON (no markdown):
+{{
+    "specialist": "cardiology",
+    "secondary_check_needed": false,
+    "reasoning": "one-sentence rationale"
+}}
+specialist must be one of: cardiology, neurology, pathology, unknown"""),
+    ("human", "Patient symptoms: {symptoms}"),
+])
+
+_CONFLICT_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", """You are a medical conflict resolution specialist.
+Two AI agents have assessed the same patient. Determine whether their findings materially conflict.
+
+A CONFLICT exists when:
+- One agent reports LOW/normal severity while another reports HIGH or CRITICAL
+- Diagnoses directly contradict each other (e.g. "healthy" vs "at risk")
+- Emergency care recommendations significantly disagree
+
+Respond ONLY with valid JSON (no markdown):
+{{
+    "conflict_detected": false,
+    "conflict_reason": "No significant conflict detected between the two assessments.",
+    "resolution_needed": false
+}}"""),
+    ("human", """Primary Assessment ({primary_agent}):
+{primary_summary}
+Severity: {primary_severity}
+
+Secondary Assessment ({secondary_agent}):
+{secondary_summary}
+Severity: {secondary_severity}"""),
+])
+
+_triage_chain = _TRIAGE_PROMPT | _llm
+_conflict_chain = _CONFLICT_PROMPT | _llm
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _parse_json(content: str) -> dict:
+    content = content.strip()
+    if content.startswith("```"):
+        content = content.split("\n", 1)[-1]
+        content = content.rsplit("```", 1)[0]
+    return json.loads(content.strip())
+
+
+def _diagnosis_summary(diagnosis: dict) -> str:
+    return (
+        diagnosis.get("diagnosysDetails") or   # cardiology (original typo preserved)
+        diagnosis.get("diagnosisDetails") or   # neurology
+        diagnosis.get("analysisDetails") or    # pathology
+        str(diagnosis)
     )
-    
+
+
+# ── Nodes ────────────────────────────────────────────────────────────────────
+
+async def triage_node(state: AgentState) -> dict:
+    """LLM-based medical triage: determines specialist and secondary check need."""
+    symptoms = state.get("symptoms", "")
+    logger.info("[TRIAGE] patient: %s | symptoms: %.100s...", state.get("patient_id"), symptoms)
+
     try:
-        response = llm.invoke([HumanMessage(content=prompt)])
-        decision = response.content.strip().lower()
-        
-        # Log the decision for transparency
-        logger.info(f"Master Router Decision: {decision}")
-        
-        return {"next_node": decision}
+        result = _triage_chain.invoke({"symptoms": symptoms})
+        raw = _parse_json(result.content)
+        specialist = raw.get("specialist", "unknown").lower().strip()
+        secondary_needed = bool(raw.get("secondary_check_needed", False))
+        reasoning = raw.get("reasoning", "")
+
+        if specialist not in ("cardiology", "neurology", "pathology"):
+            specialist = "unknown"
+
+        logger.info("[TRIAGE] → %s | secondary: %s | reason: %s", specialist, secondary_needed, reasoning)
+        return {
+            "assigned_specialist": specialist,
+            "secondary_check_needed": secondary_needed,
+            "messages": [
+                f"[TRIAGE] Routing to '{specialist}'. "
+                f"Secondary check: {secondary_needed}. Reason: {reasoning}"
+            ],
+        }
     except Exception as e:
-        logger.error(f"Router Decision Failed: {str(e)}")
-        return {"next_node": "finish"}
+        logger.error("[TRIAGE] Failed: %s", str(e))
+        return {
+            "assigned_specialist": "unknown",
+            "secondary_check_needed": False,
+            "messages": [f"[TRIAGE] Error during triage: {str(e)}"],
+        }
 
-async def cardiology_node(state: AgentState):
+
+async def specialist_node(state: AgentState) -> dict:
+    """Dispatch to the appropriate specialist agent via HTTP."""
+    patient_id = state["patient_id"]
+    symptoms = state["symptoms"]
+    specialist = state["assigned_specialist"]
+    retry = state.get("diagnosis_retry_count", 0)
+    is_followup = retry > 0   # treat subsequent calls as follow-ups with refined context
+
+    logger.info("[SPECIALIST] patient: %s | specialist: %s | retry: %d", patient_id, specialist, retry)
+
+    try:
+        if specialist == "cardiology":
+            data = await call_cardiology_api(patient_id, symptoms, is_followup)
+            agent_name = "Cardiology_Specialist"
+        elif specialist == "neurology":
+            data = await call_neurology_api(patient_id, symptoms, is_followup)
+            agent_name = "Neurology_Specialist"
+        elif specialist == "pathology":
+            data = await call_pathology_api(patient_id, symptoms, is_followup)
+            agent_name = "Pathology_Specialist"
+        else:
+            return {
+                "requires_human_review": True,
+                "human_review_reason": f"Unknown specialist '{specialist}' — cannot route.",
+                "messages": [f"[SPECIALIST] Cannot route to unknown specialist: {specialist}"],
+            }
+
+        # Unwrap GenericResponse wrapper
+        if not data.get("is_success") or not data.get("payload"):
+            return {
+                "requires_human_review": True,
+                "human_review_reason": f"{specialist} agent returned failure or empty response.",
+                "messages": [f"[{agent_name.upper()}] Response failed or empty."],
+            }
+
+        diagnosis = data["payload"].get("diagnosis")
+        if not diagnosis:
+            return {
+                "requires_human_review": True,
+                "human_review_reason": f"{specialist} returned no diagnosis in payload.",
+                "messages": [f"[{agent_name.upper()}] No diagnosis in payload."],
+            }
+
+        severity = diagnosis.get("severity", "N/A")
+        emergency = diagnosis.get("emergencyCareNeeded", "N/A")
+        logger.info("[%s] severity: %s | emergency: %s", agent_name.upper(), severity, emergency)
+
+        return {
+            "specialist_diagnosis": diagnosis,
+            "specialist_agent": agent_name,
+            "messages": [
+                f"[{agent_name.upper()}] Severity: {severity} | Emergency: {emergency}"
+            ],
+        }
+
+    except Exception as e:
+        logger.error("[SPECIALIST] Error: %s", str(e))
+        return {
+            "requires_human_review": True,
+            "human_review_reason": f"{specialist} service unreachable: {str(e)}",
+            "messages": [f"[SPECIALIST] Service error: {str(e)}"],
+        }
+
+
+async def secondary_check_node(state: AgentState) -> dict:
+    """Call the pathology agent as a secondary lab cross-check."""
+    patient_id = state["patient_id"]
+    symptoms = state["symptoms"]
+
+    logger.info("[SECONDARY_CHECK] Running pathology cross-check | patient: %s", patient_id)
+
+    try:
+        data = await call_pathology_api(patient_id, symptoms, is_followup=False)
+
+        secondary_diagnosis = None
+        if data.get("is_success") and data.get("payload"):
+            secondary_diagnosis = data["payload"].get("diagnosis")
+
+        if secondary_diagnosis:
+            severity = secondary_diagnosis.get("severity", "N/A")
+            logger.info("[SECONDARY_CHECK] Pathology severity: %s", severity)
+            return {
+                "secondary_diagnosis": secondary_diagnosis,
+                "secondary_agent": "Pathology_Specialist",
+                "secondary_check_done": True,
+                "messages": [f"[PATHOLOGY_SECONDARY] Severity: {severity}"],
+            }
+        else:
+            logger.warning("[SECONDARY_CHECK] Pathology returned empty — proceeding without secondary data")
+            return {
+                "secondary_diagnosis": None,
+                "secondary_agent": None,
+                "secondary_check_done": True,
+                "messages": ["[PATHOLOGY_SECONDARY] Empty response — proceeding without secondary data"],
+            }
+
+    except Exception as e:
+        logger.warning("[SECONDARY_CHECK] Unavailable (non-blocking): %s", str(e))
+        return {
+            "secondary_diagnosis": None,
+            "secondary_agent": None,
+            "secondary_check_done": True,
+            "messages": [f"[PATHOLOGY_SECONDARY] Service unavailable: {str(e)}"],
+        }
+
+
+async def conflict_check_node(state: AgentState) -> dict:
+    """LLM-based conflict detection between primary and secondary diagnoses."""
+    primary = state.get("specialist_diagnosis")
+    secondary = state.get("secondary_diagnosis")
+    primary_agent = state.get("specialist_agent", "Primary Specialist")
+    secondary_agent = state.get("secondary_agent", "Pathology Specialist")
+
+    if not secondary:
+        return {
+            "conflict_detected": False,
+            "conflict_reason": "No secondary diagnosis — conflict check skipped.",
+            "messages": ["[CONFLICT_CHECK] No secondary data — skipped."],
+        }
+
+    primary_summary = _diagnosis_summary(primary or {})
+    secondary_summary = _diagnosis_summary(secondary)
+    primary_severity = (primary or {}).get("severity", "UNKNOWN")
+    secondary_severity = secondary.get("severity", "UNKNOWN")
+
+    logger.info(
+        "[CONFLICT_CHECK] primary_severity: %s | secondary_severity: %s",
+        primary_severity, secondary_severity,
+    )
+
+    try:
+        result = _conflict_chain.invoke({
+            "primary_agent": primary_agent,
+            "primary_summary": primary_summary,
+            "primary_severity": primary_severity,
+            "secondary_agent": secondary_agent,
+            "secondary_summary": secondary_summary,
+            "secondary_severity": secondary_severity,
+        })
+        raw = _parse_json(result.content)
+        conflict = bool(raw.get("conflict_detected", False))
+        reason = raw.get("conflict_reason", "")
+
+        if conflict:
+            logger.warning("[CONFLICT_CHECK] Conflict detected: %s", reason)
+            return {
+                "conflict_detected": True,
+                "conflict_reason": reason,
+                "requires_human_review": True,
+                "human_review_reason": (
+                    f"Conflicting diagnoses between {primary_agent} and {secondary_agent}. "
+                    f"Reason: {reason}"
+                ),
+                "messages": [f"[CONFLICT_CHECK] ⚠ Conflict detected: {reason}"],
+            }
+
+        logger.info("[CONFLICT_CHECK] No conflict.")
+        return {
+            "conflict_detected": False,
+            "conflict_reason": reason,
+            "messages": [f"[CONFLICT_CHECK] No conflict. {reason}"],
+        }
+
+    except Exception as e:
+        logger.error("[CONFLICT_CHECK] Error: %s — proceeding without conflict flag", str(e))
+        return {
+            "conflict_detected": False,
+            "conflict_reason": f"Conflict check error: {str(e)}",
+            "messages": [f"[CONFLICT_CHECK] Error: {str(e)} — proceeding"],
+        }
+
+
+async def xai_diagnosis_validator_node(state: AgentState) -> dict:
+    """Validate the specialist diagnosis via the XAI service (retry loop #1)."""
+    patient_id = state["patient_id"]
+    symptoms = state["symptoms"]
+    diagnosis = state.get("specialist_diagnosis", {})
+    specialist_agent = state.get("specialist_agent", "Unknown_Specialist")
+    attempt = state.get("diagnosis_retry_count", 0) + 1  # 1-based display
+
+    logger.info("[XAI_DIAGNOSIS] patient: %s | attempt: %d/%d", patient_id, attempt, MAX_RETRY_COUNT)
+
+    try:
+        xai_result = await call_validate_diagnosis(patient_id, symptoms, specialist_agent, diagnosis)
+        payload = xai_result.get("payload", {}) if xai_result.get("is_success") else {}
+        is_validated = payload.get("result", {}).get("is_validated", False)
+
+        new_retry = attempt  # attempt already = old_count + 1
+
+        if is_validated:
+            logger.info("[XAI_DIAGNOSIS] ✓ Validated | patient: %s", patient_id)
+            return {
+                "diagnosis_validated": True,
+                "diagnosis_retry_count": new_retry,
+                "diagnosis_xai_result": payload,
+                "messages": [f"[XAI_DIAGNOSIS] ✓ Validated on attempt {attempt}"],
+            }
+
+        # Validation failed
+        if new_retry >= MAX_RETRY_COUNT:
+            logger.warning("[XAI_DIAGNOSIS] ✗ Max retries reached | patient: %s", patient_id)
+            return {
+                "diagnosis_validated": False,
+                "diagnosis_retry_count": new_retry,
+                "diagnosis_xai_result": payload,
+                "requires_human_review": True,
+                "human_review_reason": (
+                    f"Diagnosis XAI validation failed after {new_retry} attempts. "
+                    f"Summary: {payload.get('result', {}).get('validation_summary', 'N/A')}"
+                ),
+                "messages": [
+                    f"[XAI_DIAGNOSIS] ✗ Validation failed — max retries ({MAX_RETRY_COUNT}) reached."
+                ],
+            }
+
+        logger.info("[XAI_DIAGNOSIS] ✗ Validation failed | attempt: %d — retrying specialist", attempt)
+        return {
+            "diagnosis_validated": False,
+            "diagnosis_retry_count": new_retry,
+            "diagnosis_xai_result": payload,
+            "messages": [
+                f"[XAI_DIAGNOSIS] ✗ Validation failed (attempt {attempt}) — retrying specialist."
+            ],
+        }
+
+    except Exception as e:
+        new_retry = state.get("diagnosis_retry_count", 0) + 1
+        logger.error("[XAI_DIAGNOSIS] Service error: %s", str(e))
+        if new_retry >= MAX_RETRY_COUNT:
+            return {
+                "diagnosis_validated": False,
+                "diagnosis_retry_count": new_retry,
+                "diagnosis_xai_result": None,
+                "requires_human_review": True,
+                "human_review_reason": f"XAI diagnosis service error after {new_retry} attempts: {str(e)}",
+                "messages": [f"[XAI_DIAGNOSIS] Service error — max retries reached."],
+            }
+        return {
+            "diagnosis_validated": False,
+            "diagnosis_retry_count": new_retry,
+            "diagnosis_xai_result": None,
+            "messages": [f"[XAI_DIAGNOSIS] Service error: {str(e)} — retrying."],
+        }
+
+
+async def treatment_node(state: AgentState) -> dict:
+    """Invoke the treatment agent to generate a care plan."""
+    patient_id = state["patient_id"]
+    diagnosis = state.get("specialist_diagnosis", {})
+    specialist_agent = state.get("specialist_agent", "Unknown_Specialist")
+    retry = state.get("treatment_retry_count", 0)
+
+    summary = _diagnosis_summary(diagnosis)
+    severity = diagnosis.get("severity", "UNKNOWN")
+
+    logger.info("[TREATMENT] patient: %s | severity: %s | retry: %d", patient_id, severity, retry)
+
+    try:
+        raw = await call_treatment_api(
+            patient_id=patient_id,
+            diagnosis=f"[{severity}] {summary}",
+            specialist_notes=(
+                f"Specialist: {specialist_agent}. "
+                f"Hospitalization: {diagnosis.get('hospitalizationNeeded', 'N/A')}. "
+                f"Emergency: {diagnosis.get('emergencyCareNeeded', 'N/A')}."
+            ),
+        )
+        # Unwrap GenericResponse[TreatmentResponse] wrapper
+        treatment_payload = None
+        if raw.get("is_success") and raw.get("payload"):
+            treatment_payload = raw["payload"]  # {agent, agent_id, treatment: {...}}
+        else:
+            treatment_payload = raw  # fallback: store as-is
+
+        logger.info("[TREATMENT] Recommendation received | patient: %s", patient_id)
+        urgency = (treatment_payload or {}).get("treatment", {}).get("urgency", "N/A")
+        return {
+            "treatment_recommendation": treatment_payload,
+            "messages": [f"[TREATMENT] Care plan generated for patient {patient_id} | urgency: {urgency}"],
+        }
+
+    except Exception as e:
+        logger.error("[TREATMENT] Error: %s", str(e))
+        return {
+            "treatment_recommendation": None,
+            "messages": [f"[TREATMENT] Error: {str(e)}"],
+        }
+
+
+async def xai_treatment_validator_node(state: AgentState) -> dict:
+    """Validate the treatment recommendation via the XAI service (retry loop #2)."""
+    patient_id = state["patient_id"]
+    diagnosis = state.get("specialist_diagnosis", {})
+    treatment = state.get("treatment_recommendation") or {}
+    attempt = state.get("treatment_retry_count", 0) + 1
+
+    summary = _diagnosis_summary(diagnosis)
+    severity = diagnosis.get("severity", "UNKNOWN")
+    # Extract treatment plan text from the unwrapped TreatmentResponse payload
+    treatment_obj = treatment.get("treatment", {})
+    treatment_rec = treatment_obj.get("treatmentPlan", treatment.get("recommendation", ""))
+
+    logger.info("[XAI_TREATMENT] patient: %s | attempt: %d/%d", patient_id, attempt, MAX_RETRY_COUNT)
+
+    try:
+        xai_result = await call_validate_treatment(
+            patient_id=patient_id,
+            specialist_agent=state.get("specialist_agent", "Unknown_Specialist"),
+            diagnosis_summary=summary,
+            severity=severity,
+            treatment_recommendation=treatment_rec,
+        )
+        payload = xai_result.get("payload", {}) if xai_result.get("is_success") else {}
+        is_validated = payload.get("result", {}).get("is_validated", False)
+
+        new_retry = attempt
+
+        if is_validated:
+            logger.info("[XAI_TREATMENT] ✓ Validated | patient: %s", patient_id)
+            return {
+                "treatment_validated": True,
+                "treatment_retry_count": new_retry,
+                "treatment_xai_result": payload,
+                "messages": [f"[XAI_TREATMENT] ✓ Validated on attempt {attempt}"],
+            }
+
+        if new_retry >= MAX_RETRY_COUNT:
+            logger.warning("[XAI_TREATMENT] ✗ Max retries reached | patient: %s", patient_id)
+            return {
+                "treatment_validated": False,
+                "treatment_retry_count": new_retry,
+                "treatment_xai_result": payload,
+                "requires_human_review": True,
+                "human_review_reason": (
+                    f"Treatment XAI validation failed after {new_retry} attempts. "
+                    f"Summary: {payload.get('result', {}).get('validation_summary', 'N/A')}"
+                ),
+                "messages": [
+                    f"[XAI_TREATMENT] ✗ Validation failed — max retries ({MAX_RETRY_COUNT}) reached."
+                ],
+            }
+
+        logger.info("[XAI_TREATMENT] ✗ Validation failed | attempt: %d — retrying treatment", attempt)
+        return {
+            "treatment_validated": False,
+            "treatment_retry_count": new_retry,
+            "treatment_xai_result": payload,
+            "messages": [
+                f"[XAI_TREATMENT] ✗ Validation failed (attempt {attempt}) — retrying treatment."
+            ],
+        }
+
+    except Exception as e:
+        new_retry = state.get("treatment_retry_count", 0) + 1
+        logger.error("[XAI_TREATMENT] Service error: %s", str(e))
+        if new_retry >= MAX_RETRY_COUNT:
+            return {
+                "treatment_validated": False,
+                "treatment_retry_count": new_retry,
+                "treatment_xai_result": None,
+                "requires_human_review": True,
+                "human_review_reason": f"XAI treatment service error after {new_retry} attempts: {str(e)}",
+                "messages": [f"[XAI_TREATMENT] Service error — max retries reached."],
+            }
+        return {
+            "treatment_validated": False,
+            "treatment_retry_count": new_retry,
+            "treatment_xai_result": None,
+            "messages": [f"[XAI_TREATMENT] Service error: {str(e)} — retrying."],
+        }
+
+
+async def finish_node(state: AgentState) -> dict:
     """
-    Worker Agent specialized in Cardiology.
-    Invokes the remote Cardiology Microservice via the handshake client.
+    Assemble the final response and persist to MongoDB.
+    This node is the terminal node — reached on success OR human-review.
     """
-    patient_id = state.get('patient_id')
-    symptoms = state.get('symptoms')
+    patient_id = state.get("patient_id", "UNKNOWN")
+    requires_review = state.get("requires_human_review", False)
+    diagnosis = state.get("specialist_diagnosis") or {}
 
-    logger.info(f"Invoking Cardiology Microservice for Patient: {patient_id}")
-
-    # Objective 2: Trigger autonomous decision-making in heart diagnosis
-    diagnosis_data = await call_cardiology_api(patient_id, symptoms)
-    
-    diagnosis_text = diagnosis_data.get("diagnosis", "Diagnosis unavailable.")
-    
-    # Update the global state with the specialist's findings
-    return {
-        "current_diagnosis": diagnosis_text,
-        "messages": state.get('messages', []) + [f"Cardiology Specialist Output: {diagnosis_text}"]
+    final_response = {
+        "patient_id": patient_id,
+        "status": "HUMAN_REVIEW_REQUIRED" if requires_review else "COMPLETED",
+        "specialist_agent": state.get("specialist_agent"),
+        "diagnosis": {
+            "summary": _diagnosis_summary(diagnosis),
+            "severity": diagnosis.get("severity", "UNKNOWN"),
+            "emergency_care_needed": diagnosis.get("emergencyCareNeeded", "UNKNOWN"),
+            "hospitalization_needed": diagnosis.get("hospitalizationNeeded", "UNKNOWN"),
+            "full_details": diagnosis,
+        } if diagnosis else None,
+        "xai_diagnosis_validation": state.get("diagnosis_xai_result"),
+        "treatment": state.get("treatment_recommendation"),
+        "xai_treatment_validation": state.get("treatment_xai_result"),
+        "conflict_detected": state.get("conflict_detected", False),
+        "conflict_reason": state.get("conflict_reason", ""),
+        "human_review_reason": state.get("human_review_reason", "") if requires_review else None,
+        "audit_trail": state.get("messages", []),
     }
 
-async def xai_validator_node(state: AgentState):
-    """
-    XAI Revalidation Layer.
-    Placeholder for the revalidation logic before final patient care.
-    """
-    diagnosis = state.get('current_diagnosis', "")
-    
-    # Placeholder Logic: In next step, this will call the XAI Microservice 
-    # It will verify findings against clinical guidelines (RAG)
-    is_valid = len(diagnosis) > 10  # Mock validation logic
-    
-    logger.info(f"XAI Validation Status: {'Passed' if is_valid else 'Failed'}")
-    
-    return {"is_validated": is_valid}
+    status_label = "HUMAN_REVIEW_REQUIRED" if requires_review else "COMPLETED"
+    logger.info("[FINISH] patient: %s | status: %s", patient_id, status_label)
 
-async def finish_node(state: AgentState):
-    """
-    Final node to terminate the workflow once revalidation is successful.
-    """
-    return {"next_node": "END"}
+    # Persist to MongoDB asynchronously (non-blocking)
+    asyncio.create_task(save_case(final_response))
+
+    return {"final_response": final_response}

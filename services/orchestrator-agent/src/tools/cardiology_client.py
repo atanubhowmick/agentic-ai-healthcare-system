@@ -1,35 +1,15 @@
 import httpx
-import logging
-from src.core.config import CARDIOLOGY_SERVICE_URL
+from core.config import CARDIOLOGY_SERVICE_URL, HTTP_TIMEOUT
+from log.logger import logger
 
-logger = logging.getLogger(__name__)
 
-async def call_cardiology_api(patient_id: str, symptoms: str):
-    """
-    Communicates with the Cardiology Microservice to get a diagnostic prediction.
-    Implements the handshake between the Orchestration Layer and Worker Layer.
-    """
-    payload = {
-        "patient_id": patient_id,
-        "symptoms": symptoms
-    }
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            # Objective 2: Call the autonomous decision-making framework endpoint
-            response = await client.post(
-                f"{CARDIOLOGY_SERVICE_URL}/diagnose", 
-                json=payload
-            )
-            response.raise_for_status()
-            
-            # Returns the diagnosis for the LangGraph state
-            return response.json()
-            
-        except httpx.HTTPStatusError as e:
-            logger.error(f"Cardiology Service Error: {e.response.text}")
-            return {"diagnosis": "Error: Specialist unavailable", "status": "Failed"}
-        except Exception as e:
-            logger.error(f"Connection failed: {str(e)}")
-            return {"diagnosis": "Error: Connection Refused", "status": "Failed"}
-        
+async def call_cardiology_api(patient_id: str, symptoms: str, is_followup: bool = False) -> dict:
+    """POST /cardiology-agent/diagnose and return the parsed response dict."""
+    payload = {"patient_id": patient_id, "symptoms": symptoms, "is_followup": is_followup}
+    url = f"{CARDIOLOGY_SERVICE_URL}/diagnose"
+    logger.debug("[cardiology_client] POST %s | patient: %s | followup: %s", url, patient_id, is_followup)
+
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+        response = await client.post(url, json=payload)
+        response.raise_for_status()
+        return response.json()

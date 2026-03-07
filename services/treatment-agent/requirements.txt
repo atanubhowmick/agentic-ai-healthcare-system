@@ -1,10 +1,6 @@
 fastapi[standard]
+pydantic
 langchain
 langchain-openai
-chromadb
-pypdf
-pandas
-numpy
-scikit-learn
+langchain-community
 python-dotenv
-tiktoken

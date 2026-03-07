@@ -2,6 +2,7 @@ import json
 from agent.pathology_agent import pathology_executor
 from datamodel.models import DiagnosisRequest, DiagnosisResult, DiagnosisResponse
 from exception.exceptions import LLMInvocationException, LLMResponseParseException
+from constant.constants import PATHOLOGY_AGENT_ID
 from log.logger import logger
 
 
@@ -47,6 +48,6 @@ def diagnose(request: DiagnosisRequest) -> DiagnosisResponse:
 
     return DiagnosisResponse(
         agent="Pathology_Specialist",
-        agent_id="PATHOLOGY-AGENT-1001",
+        agent_id=PATHOLOGY_AGENT_ID,
         diagnosis=diagnosis
     )

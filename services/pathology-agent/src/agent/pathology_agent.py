@@ -28,7 +28,7 @@ prompt = ChatPromptTemplate.from_messages([
 
 # 2. Initialize LLM and chain
 logger.debug("Initializing Pathology LLM and chain")
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+llm = ChatOpenAI(model="gpt-5.2", temperature=0)
 pathology_chain = prompt | llm
 logger.debug("Pathology chain initialized successfully")
 

@@ -2,6 +2,7 @@ import json
 from agent.neurology_agent import neurology_executor
 from datamodel.models import NeurologyRequest, NeurologyResult, NeurologyResponse
 from exception.exceptions import LLMInvocationException, LLMResponseParseException
+from constant.constants import NEUROLOGY_AGENT_ID
 from log.logger import logger
 
 
@@ -46,6 +47,6 @@ def diagnose(request: NeurologyRequest) -> NeurologyResponse:
 
     return NeurologyResponse(
         agent="Neurology_Specialist",
-        agent_id='NEURO-AGENT-1001',
+        agent_id=NEUROLOGY_AGENT_ID,
         diagnosis=diagnosis
     )

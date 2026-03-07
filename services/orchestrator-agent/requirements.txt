@@ -1,8 +1,11 @@
 fastapi[standard]
+pydantic
 langchain
 langgraph
 langchain-openai
+langchain-community
 httpx
-pydantic
+motor
+pymongo
 aiokafka
 python-dotenv

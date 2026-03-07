@@ -1,4 +1,5 @@
 fastapi[standard]
+pydantic
 shap
 langchain
 langchain-openai
