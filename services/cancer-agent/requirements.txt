@@ -1,13 +1,6 @@
 fastapi[standard]
 pydantic
 langchain
-langgraph
 langchain-openai
 langchain-community
-langchain-chroma
-chromadb
-httpx
-motor
-pymongo
-aiokafka
 python-dotenv

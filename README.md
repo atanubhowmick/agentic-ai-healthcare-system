@@ -14,12 +14,13 @@ A multi-agent AI system for clinical decision support, built with FastAPI and La
 │                                 │                            │
 │  ┌───────────────────────────┐  │  ┌──────────────────────┐  │
 │  │  Cardiology Agent (:8001) │  │  │  XAI Validation      │  │
-│  │  Neurology Agent  (:8005) │──┼─▶│  Service     (:8004)│  │
-│  │  Pathology Agent  (:8002) │  │  └──────────────────────┘  │
+│  │  Neurology Agent  (:8002) │──┼─▶│  Service     (:8004)│  │
+│  │  Cancer Agent (:8003)     |  |  |                      |  |
+   |  Pathology Agent  (:8011) │  │  └──────────────────────┘  │
 │  └───────────────────────────┘  │                            │
 │                                 │  ┌──────────────────────┐  │
 │  ┌───────────────────────────┐  │  │  Treatment Agent     │  │
-│  │  LangChain ReAct Executor │  │  │             (:8003)  │  │
+│  │  LangChain ReAct Executor │  │  │             (:8012)  │  │
 │  │  + Conversation Memory    │  │  └──────────────────────┘  │
 │  └───────────────────────────┘  │                            │
 └─────────────────────────────────┴────────────────────────────┘
@@ -30,10 +31,13 @@ A multi-agent AI system for clinical decision support, built with FastAPI and La
 | # | Service | Description | Port |
 |---|---------|-------------|------|
 | 1 | **Cardiology Agent** | Analyses cardiac symptoms, flags anomalies, recommends cardiac workup | 8001 |
-| 2 | **Pathology Agent** | Analyses lab results and biomarker abnormalities | 8002 |
-| 3 | **Treatment Agent** | Generates comprehensive treatment and patient care plans | 8003 |
-| 4 | **XAI Validation Service** | LLM-based clinical safety validation with rule-based checks and SHAP explainability | 8004 |
-| 5 | **Neurology Agent** | Analyses neurological symptoms, recommends imaging and neurological tests | 8005 |
+| 2 | **Neurology Agent** | Analyses neurological symptoms, recommends imaging and neurological tests | 8002 |
+| 3 | **Cancer Agent** | Oncology assessment — TNM staging, tumour markers, biopsy and imaging guidance | 8003 |
+| 4 | **Pathology Agent** | Analyses lab results and biomarker abnormalities | 8011 |
+| 5 | **Treatment Agent** | Generates comprehensive treatment and patient care plans | 8012 |
+| 6 | **Orchestrator Agent** | LangGraph master agent — triage, ChromaDB cache, retry loops, XAI gating | 8015 |
+| 7 | **XAI Validation Service** | LLM-based clinical safety validation with rule-based checks and SHAP explainability | 8016 |
+| 8 | **Evaluation Service** | System monitoring and metrics calculation | 8017 |
 
 ---
 
@@ -45,6 +49,7 @@ Each service exposes interactive API documentation via FastAPI's built-in Swagge
 |---------|-----------|-------|
 | Cardiology Agent | http://localhost:8001/docs | http://localhost:8001/redoc |
 | Neurology Agent | http://localhost:8002/docs | http://localhost:8002/redoc |
+| Cancer Agent | http://localhost:8003/docs | http://localhost:8002/redoc |
 | Pathology Agent | http://localhost:8011/docs | http://localhost:8011/redoc |
 | Treatment Agent | http://localhost:8012/docs | http://localhost:8012/redoc |
 | Orchestrator Svc | http://localhost:8015/docs | http://localhost:8015/redoc |

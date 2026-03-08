@@ -10,7 +10,7 @@ async def call_treatment_api(patient_id: str, diagnosis: str, specialist_notes: 
         "diagnosis": diagnosis,
         "specialist_notes": specialist_notes,
     }
-    url = f"{TREATMENT_SERVICE_URL}/treatment-agent/recommend"
+    url = f"{TREATMENT_SERVICE_URL}/recommend"
     logger.debug("[treatment_client] POST %s | patient: %s", url, patient_id)
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:

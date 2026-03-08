@@ -33,27 +33,36 @@ services:
     networks:
       - healthcare-net
 
-  # 1. Orchestrator Agent (The Router)
-  orchestrator-service:
-    build: ./services/orchestrator-service
+  # 1. Orchestrator Agent (The Router / Master Agent) — port 8015
+  orchestrator-agent:
+    build: ./services/orchestrator-agent
     ports:
-      - "8000:8000"
+      - "8015:8015"
     environment:
-      - CARDIOLOGY_SERVICE_URL=http://cardiology-service:8001
-      - PATHOLOGY_SERVICE_URL=http://pathology-service:8002
-      - TREATMENT_SERVICE_URL=http://treatment-service:8003
-      - XAI_SERVICE_URL=http://xai-validator-service:8004
+      - CARDIOLOGY_SERVICE_URL=http://cardiology-agent:8001/cardiology-agent
+      - NEUROLOGY_SERVICE_URL=http://neurology-agent:8002/neurology-agent
+      - CANCER_SERVICE_URL=http://cancer-agent:8003/cancer-agent
+      - PATHOLOGY_SERVICE_URL=http://pathology-agent:8011/pathology-agent
+      - TREATMENT_SERVICE_URL=http://treatment-agent:8012
+      - XAI_SERVICE_URL=http://xai-validation-service:8016/xai-validator
+      - MONGO_URI=mongodb://mongodb:27017
+      - MONGO_DB=healthcare_ai
+      - CHROMA_PERSIST_DIR=/app/chroma_store
+      - CHROMA_SIMILARITY_THRESHOLD=0.90
+      - MAX_RETRY_COUNT=3
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - chroma_data:/app/chroma_store
     depends_on:
       - kafka
       - mongodb
     networks:
       - healthcare-net
 
-  # 2. Cardiology Specialist Service
-  cardiology-service:
-    build: ./services/cardiology-service
+  # 2. Cardiology Specialist Agent — port 8001
+  cardiology-agent:
+    build: ./services/cardiology-agent
     ports:
       - "8001:8001"
     environment:
@@ -61,9 +70,9 @@ services:
     networks:
       - healthcare-net
 
-  # 3. Pathology Specialist Service
-  pathology-service:
-    build: ./services/pathology-service
+  # 3. Neurology Specialist Agent — port 8002
+  neurology-agent:
+    build: ./services/neurology-agent
     ports:
       - "8002:8002"
     environment:
@@ -71,9 +80,9 @@ services:
     networks:
       - healthcare-net
 
-  # 4. Treatment & Patient Care Service (RAG)
-  treatment-service:
-    build: ./services/treatment-service
+  # 4. Cancer Oncology Specialist Agent — port 8003
+  cancer-agent:
+    build: ./services/cancer-agent
     ports:
       - "8003:8003"
     environment:
@@ -81,11 +90,41 @@ services:
     networks:
       - healthcare-net
 
-  # 5. XAI & Ethical Validator Service
-  xai-validator-service:
-    build: ./services/xai-validator-service
+  # 5. Pathology Specialist Agent — port 8011
+  pathology-agent:
+    build: ./services/pathology-agent
     ports:
-      - "8004:8004"
+      - "8011:8011"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    networks:
+      - healthcare-net
+
+  # 6. Treatment & Patient Care Agent — port 8012
+  treatment-agent:
+    build: ./services/treatment-agent
+    ports:
+      - "8012:8012"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    networks:
+      - healthcare-net
+
+  # 7. XAI & Ethical Validator Service — port 8016
+  xai-validation-service:
+    build: ./xai-validation-service
+    ports:
+      - "8016:8016"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    networks:
+      - healthcare-net
+
+  # 8. Evaluation Service — port 8017
+  evaluation-service:
+    build: ./services/evaluation-service
+    ports:
+      - "8017:8017"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     networks:
@@ -97,3 +136,4 @@ networks:
 
 volumes:
   mongo_data:
+  chroma_data:
