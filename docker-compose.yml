@@ -46,7 +46,7 @@ services:
       - TREATMENT_SERVICE_URL=http://treatment-agent:8012
       - XAI_SERVICE_URL=http://xai-validation-service:8016/xai-validator
       - MONGO_URI=mongodb://mongodb:27017
-      - MONGO_DB=healthcare_ai
+      - MONGO_DB=agentic_ai_healthcare_db
       - CHROMA_PERSIST_DIR=/app/chroma_store
       - CHROMA_SIMILARITY_THRESHOLD=0.90
       - MAX_RETRY_COUNT=3

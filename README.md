@@ -158,7 +158,7 @@ Generate a treatment and patient care plan based on a specialist diagnosis.
     "agent_id": "TREAT-AGENT-1004",
     "treatment": {
       "treatmentPlan": "...",
-      "medications": ["Aspirin – 325mg – once daily", "Heparin – weight-based – IV infusion"],
+      "medications": ["Aspirin - 325mg - once daily", "Heparin - weight-based - IV infusion"],
       "followUpRequired": "YES",
       "followUpTimeframe": "1 week",
       "lifestyleRecommendations": ["Low-sodium diet", "Cardiac rehabilitation"],
