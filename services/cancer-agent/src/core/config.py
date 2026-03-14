@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── ChromaDB (MIMIC-IV vector store) ─────────────────────────────────────────
+# -- ChromaDB (MIMIC-IV vector store) -----------------------------------------
 # Separate store from the orchestrator's treatment cache
 CHROMA_PERSIST_DIR = os.getenv("CANCER_CHROMA_PERSIST_DIR", "./cancer_chroma_store")
 MIMIC_COLLECTION_NAME = "mimic_cancer_cases"

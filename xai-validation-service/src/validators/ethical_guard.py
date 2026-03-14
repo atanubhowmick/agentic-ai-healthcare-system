@@ -5,7 +5,7 @@ from log.logger import logger
 
 llm = ChatOpenAI(model="gpt-5.2", temperature=0)
 
-# ── Diagnosis Validation ────────────────────────────────────────────────────
+# -- Diagnosis Validation ----------------------------------------------------
 
 _DIAGNOSIS_PROMPT = ChatPromptTemplate.from_messages([
     ("system", """You are a Clinical Safety Validator with expertise in medical diagnosis review.
@@ -36,7 +36,7 @@ Hospitalization Needed: {hospitalization_needed}"""),
 
 _diagnosis_chain = _DIAGNOSIS_PROMPT | llm
 
-# ── Treatment Validation ────────────────────────────────────────────────────
+# -- Treatment Validation ----------------------------------------------------
 
 _TREATMENT_PROMPT = ChatPromptTemplate.from_messages([
     ("system", """You are a Clinical Safety Validator with expertise in treatment review.
@@ -65,7 +65,7 @@ Treatment Recommendation: {treatment_recommendation}"""),
 _treatment_chain = _TREATMENT_PROMPT | llm
 
 
-# ── Public helpers ──────────────────────────────────────────────────────────
+# -- Public helpers ----------------------------------------------------------
 
 def validate_diagnosis(specialist_agent: str, symptoms: str, diagnosis: dict) -> dict:
     """LLM-based clinical safety validation of a specialist diagnosis."""

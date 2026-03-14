@@ -7,23 +7,23 @@ A multi-agent AI system for clinical decision support, built with FastAPI and La
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
+┌--------------------------------------------------------------┐
 │                  Agentic AI Healthcare System                │
-├─────────────────────────────────┬────────────────────────────┤
+├---------------------------------┬----------------------------┤
 │       Specialist Agents         │      Support Services      │
 │                                 │                            │
-│  ┌───────────────────────────┐  │  ┌──────────────────────┐  │
+│  ┌---------------------------┐  │  ┌----------------------┐  │
 │  │  Cardiology Agent (:8001) │  │  │  XAI Validation      │  │
-│  │  Neurology Agent  (:8002) │──┼─▶│  Service     (:8004)│  │
+│  │  Neurology Agent  (:8002) │--┼-▶│  Service     (:8004)│  │
 │  │  Cancer Agent (:8003)     |  |  |                      |  |
-   |  Pathology Agent  (:8011) │  │  └──────────────────────┘  │
-│  └───────────────────────────┘  │                            │
-│                                 │  ┌──────────────────────┐  │
-│  ┌───────────────────────────┐  │  │  Treatment Agent     │  │
+   |  Pathology Agent  (:8011) │  │  └----------------------┘  │
+│  └---------------------------┘  │                            │
+│                                 │  ┌----------------------┐  │
+│  ┌---------------------------┐  │  │  Treatment Agent     │  │
 │  │  LangChain ReAct Executor │  │  │             (:8012)  │  │
-│  │  + Conversation Memory    │  │  └──────────────────────┘  │
-│  └───────────────────────────┘  │                            │
-└─────────────────────────────────┴────────────────────────────┘
+│  │  + Conversation Memory    │  │  └----------------------┘  │
+│  └---------------------------┘  │                            │
+└---------------------------------┴----------------------------┘
 ```
 
 ### Services
@@ -356,29 +356,29 @@ docker-compose up --build
 
 ```
 agentic-ai-healthcare-system/
-├── services/
-│   ├── cardiology-agent/
-│   │   └── src/
-│   │       ├── agent/          # LangChain ReAct executor
-│   │       ├── api/            # FastAPI router (server.py)
-│   │       ├── datamodel/      # Pydantic request/response models
-│   │       ├── exception/      # CardiologySvcException + handler
-│   │       ├── service/        # Business logic (cardiology_service.py)
-│   │       ├── log/
-│   │       └── main.py
-│   ├── neurology-agent/        # Same structure; NeurologySvcException
-│   ├── pathology-agent/        # Same structure; PathologySvcException
-│   └── treatment-agent/        # Same structure; TreatmentSvcException
-├── xai-validation-service/
-│   └── src/
-│       ├── api/                # FastAPI router (server.py)
-│       ├── datamodel/          # Validation request/response models
-│       ├── exception/          # ValidationSvcException + handler
-│       ├── explainers/         # SHAP-based explainability (shap_provider.py)
-│       ├── service/            # Business logic (validator_service.py)
-│       ├── validators/         # Rule-based checks + ethical_guard LLM validator
-│       ├── log/
-│       └── main.py
-├── docker-compose.yml
-└── README.md
+├-- services/
+│   ├-- cardiology-agent/
+│   │   └-- src/
+│   │       ├-- agent/          # LangChain ReAct executor
+│   │       ├-- api/            # FastAPI router (server.py)
+│   │       ├-- datamodel/      # Pydantic request/response models
+│   │       ├-- exception/      # CardiologySvcException + handler
+│   │       ├-- service/        # Business logic (cardiology_service.py)
+│   │       ├-- log/
+│   │       └-- main.py
+│   ├-- neurology-agent/        # Same structure; NeurologySvcException
+│   ├-- pathology-agent/        # Same structure; PathologySvcException
+│   └-- treatment-agent/        # Same structure; TreatmentSvcException
+├-- xai-validation-service/
+│   └-- src/
+│       ├-- api/                # FastAPI router (server.py)
+│       ├-- datamodel/          # Validation request/response models
+│       ├-- exception/          # ValidationSvcException + handler
+│       ├-- explainers/         # SHAP-based explainability (shap_provider.py)
+│       ├-- service/            # Business logic (validator_service.py)
+│       ├-- validators/         # Rule-based checks + ethical_guard LLM validator
+│       ├-- log/
+│       └-- main.py
+├-- docker-compose.yml
+└-- README.md
 ```
