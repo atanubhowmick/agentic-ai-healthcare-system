@@ -1,14 +1,14 @@
 """
-Cancer Service — orchestrates MIMIC-IV RAG + LLM fallback.
+Cancer Service - orchestrates MIMIC-IV RAG + LLM fallback.
 
 Diagnosis flow:
   1. Search MIMIC-IV ChromaDB for semantically similar oncology cases.
-  2a. similarity >= MIMIC_SIMILARITY_THRESHOLD (default 0.75):
-        Strong match ? full RAG context injected into prompt  (source: MIMIC_RAG)
+  2a. similarity >= MIMIC_SIMILARITY_THRESHOLD (default 0.85):
+        Strong match -> full RAG context injected into prompt  (source: MIMIC_RAG)
   2b. similarity >= MIMIC_PARTIAL_THRESHOLD (default 0.60):
-        Weak match ? partial context injected with low-confidence flag  (source: MIMIC_PARTIAL)
+        Weak match -> partial context injected with low-confidence flag  (source: MIMIC_PARTIAL)
   2c. similarity < MIMIC_PARTIAL_THRESHOLD or no cases:
-        ? pure LLM call with no MIMIC context  (source: LLM_FALLBACK)
+        -> pure LLM call with no MIMIC context  (source: LLM_FALLBACK)
   3. Parse the LLM JSON response and return DiagnosisResponse.
 """
 
@@ -71,8 +71,8 @@ def diagnose(request: DiagnosisRequest) -> DiagnosisResponse:
         if partial and not strong:
             source = "MIMIC_PARTIAL"
 
-    # -- Step 2a: Strong RAG (similarity >= 0.75) ------------------------------
-    # -- Step 2b: Partial RAG (0.60 <= similarity < 0.75) ---------------------
+    # -- Step 2a: Strong RAG (similarity >= 0.85) ------------------------------
+    # -- Step 2b: Partial RAG (0.60 <= similarity < 0.85) ---------------------
     if mimic_cases:
         if source != "MIMIC_PARTIAL":
             source = "MIMIC_RAG"

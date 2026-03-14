@@ -1,9 +1,9 @@
 """
-Cancer Oncology Agent — LangChain chains.
+Cancer Oncology Agent - LangChain chains.
 
 Two chains are exposed:
-  cancer_executor      — standard LLM-only chain (fallback)
-  cancer_rag_executor  — RAG-augmented chain (MIMIC-IV context injected at call time)
+  cancer_executor      - standard LLM-only chain (fallback)
+  cancer_rag_executor  - RAG-augmented chain (MIMIC-IV context injected at call time)
 
 The service layer (cancer_service.py) decides which to use based on MIMIC retrieval results.
 """
@@ -96,7 +96,7 @@ def _get_session_history(session_id: str) -> ChatMessageHistory:
 
 # -- Public executors ----------------------------------------------------------
 
-# Standard fallback — invoked when MIMIC returns no relevant cases
+# Standard fallback - invoked when MIMIC returns no relevant cases
 cancer_executor = RunnableWithMessageHistory(
     _standard_chain,
     _get_session_history,
@@ -104,7 +104,7 @@ cancer_executor = RunnableWithMessageHistory(
     history_messages_key="chat_history",
 )
 
-# RAG-augmented — invoked when MIMIC returns relevant cases
+# RAG-augmented - invoked when MIMIC returns relevant cases
 # Caller must pass mimic_context in the input dict alongside "input"
 cancer_rag_executor = RunnableWithMessageHistory(
     _rag_chain,
