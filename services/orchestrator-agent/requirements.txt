@@ -5,7 +5,7 @@ langgraph
 langchain-openai
 langchain-community
 langchain-chroma
-chromadb
+chromadb==0.5.23
 httpx
 motor
 pymongo

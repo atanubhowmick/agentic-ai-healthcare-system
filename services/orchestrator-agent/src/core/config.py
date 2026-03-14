@@ -27,8 +27,9 @@ XAI_SERVICE_URL = os.getenv(
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://127.0.0.1:27017")
 MONGO_DB = os.getenv("MONGO_DB", "agentic_ai_healthcare_db")
 
-# -- ChromaDB -----------------------------------------------------------------
-CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./chroma_store")
+# -- ChromaDB (external HTTP server) -----------------------------------------
+CHROMA_HOST = os.getenv("CHROMA_HOST", "127.0.0.1")
+CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8020"))
 CHROMA_SIMILARITY_THRESHOLD = float(os.getenv("CHROMA_SIMILARITY_THRESHOLD", "0.90"))
 
 # -- Orchestrator settings ----------------------------------------------------

@@ -4,7 +4,7 @@ langchain
 langchain-openai
 langchain-community
 langchain-chroma
-chromadb
+chromadb==0.5.23
 pandas
 google-cloud-bigquery
 google-cloud-bigquery-storage

@@ -3,9 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# -- ChromaDB (MIMIC-IV vector store) -----------------------------------------
-# Separate store from the orchestrator's treatment cache
-CHROMA_PERSIST_DIR = os.getenv("CANCER_CHROMA_PERSIST_DIR", "./cancer_chroma_store")
+# -- ChromaDB (external HTTP server, shared with orchestrator) ----------------
+CHROMA_HOST = os.getenv("CHROMA_HOST", "127.0.0.1")
+CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8020"))
 MIMIC_COLLECTION_NAME = "mimic_cancer_cases"
 
 # Minimum cosine similarity to accept a MIMIC case as a strong match (full RAG context).

@@ -4,9 +4,7 @@ MIMIC-IV v3.1 Cancer Cases - Data Loader
 Ingests oncology cases from MIMIC-IV v3.1 into the ChromaDB vector store used by
 the Cancer Agent for RAG (Retrieval-Augmented Generation).
 
-Supports two source modes:
-  --source bigquery   : query via Google BigQuery (requires GCP credentials)
-  --source local      : read from locally extracted MIMIC-IV CSV/gz files
+Source: Google BigQuery (requires GCP credentials)
 
 MIMIC-IV v3.1 BigQuery schemas (physionet-data project):
   physionet-data.mimiciv_3_1_hosp   - hospital module (diagnoses, admissions)
@@ -26,13 +24,10 @@ Document text priority (for semantic embedding):
 Usage
 -----
 # From BigQuery (replace MY-GCP-PROJECT with your own GCP project ID):
-python load_mimic_data.py --source bigquery --project MY-GCP-PROJECT --limit 50000
-
-# From local CSV files (path to the extracted MIMIC-IV zip):
-python load_mimic_data.py --source local --mimic-dir /path/to/mimic-iv --limit 5000
+python load_mimic_data.py --project MY-GCP-PROJECT --limit 50000
 
 # Dry-run (print first 3 records, no write):
-python load_mimic_data.py --source bigquery --project MY-GCP-PROJECT --dry-run
+python load_mimic_data.py --project MY-GCP-PROJECT --dry-run
 """
 
 import argparse
@@ -173,118 +168,20 @@ def _load_from_bigquery(project_id: str, limit: int):
 
     client = bigquery.Client(project=project_id)
     query = BIGQUERY_SQL.format(limit=limit)
-    logger.info("[LOADER] Running BigQuery query (limit=%d)...", limit)
-    rows = list(client.query(query).result())
-    logger.info("[LOADER] BigQuery returned %d rows", len(rows))
-    return [dict(r) for r in rows]
+    logger.info("[LOADER] Submitting BigQuery query (limit=%d)...", limit)
+    job = client.query(query)
+    logger.info("[LOADER] Query submitted | job_id: %s | waiting for results...", job.job_id)
 
+    rows = []
+    log_interval = 200
+    for row in job.result():
+        rows.append(dict(row))
+        n = len(rows)
+        if n % log_interval == 0:
+            logger.info("[LOADER] Fetched %d rows so far...", n)
 
-# -- Local CSV source ----------------------------------------------------------
-
-def _load_from_local(mimic_dir: str, limit: int):
-    """
-    Read and join MIMIC-IV local CSV/gz files.
-
-    Expected file layout (matches MIMIC-IV official release):
-      <mimic_dir>/hosp/diagnoses_icd.csv.gz
-      <mimic_dir>/hosp/d_icd_diagnoses.csv.gz
-      <mimic_dir>/hosp/admissions.csv.gz
-      <mimic_dir>/note/discharge.csv.gz    - preferred for clinical notes
-      <mimic_dir>/hosp/discharge.csv.gz   - fallback
-      <mimic_dir>/ed/triage.csv.gz        - ED triage chief complaints (preferred)
-
-    If no discharge notes or triage file is found the loader proceeds without
-    natural language text; records will fall back to ICD titles.
-    """
-    import pandas as pd
-    from pathlib import Path
-
-    base = Path(mimic_dir)
-
-    def _read(rel_path, **kwargs):
-        full = base / Path(rel_path)
-        if not full.exists():
-            full = full.with_suffix("")   # try uncompressed
-        logger.info("[LOADER] Reading %s", full)
-        return pd.read_csv(full, **kwargs)
-
-    def _read_optional(candidates: list, cols: list):
-        """Try each path in order, return DataFrame or None."""
-        for rel in candidates:
-            for path in (base / rel, (base / rel).with_suffix("")):
-                if path.exists():
-                    logger.info("[LOADER] Reading %s", path)
-                    return pd.read_csv(path, dtype=str, usecols=cols)
-        return None
-
-    diag  = _read("hosp/diagnoses_icd.csv.gz", dtype=str)
-    d_icd = _read("hosp/d_icd_diagnoses.csv.gz", dtype=str)
-    adm   = _read("hosp/admissions.csv.gz", dtype=str,
-                  usecols=["subject_id", "hadm_id", "discharge_location"])
-
-    notes = _read_optional(
-        ["note/discharge.csv.gz", "hosp/discharge.csv.gz"],
-        ["subject_id", "hadm_id", "text"],
-    )
-    if notes is None:
-        logger.warning("[LOADER] No discharge notes file found - proceeding without notes.")
-
-    triage = _read_optional(["ed/triage.csv.gz"], ["subject_id", "stay_id", "chiefcomplaint"])
-    edstays = _read_optional(["ed/edstays.csv.gz"], ["subject_id", "hadm_id", "stay_id"])
-    if triage is None:
-        logger.warning("[LOADER] No ED triage file found - proceeding without triage complaints.")
-
-    # Filter ICD-10 cancer codes
-    cancer_mask = diag["icd_version"].eq("10") & (
-        diag["icd_code"].str.match(r"^C") |
-        diag["icd_code"].str.match(r"^D[0-4][0-9]")
-    )
-    diag = diag[cancer_mask]
-
-    # Join ICD descriptions
-    diag = diag.merge(d_icd[["icd_code", "icd_version", "long_title"]],
-                      on=["icd_code", "icd_version"], how="left")
-
-    # Aggregate to admission level
-    diag_agg = (
-        diag.groupby(["subject_id", "hadm_id"])
-        .agg(
-            cancer_diagnoses=("long_title", lambda x: "; ".join(x.dropna().unique()[:5])),
-            icd_codes=("icd_code", lambda x: ", ".join(x.dropna().unique()[:10])),
-        )
-        .reset_index()
-    )
-
-    merged = diag_agg.merge(adm, on=["subject_id", "hadm_id"], how="left")
-
-    # Join discharge notes
-    if notes is not None:
-        merged = merged.merge(
-            notes.rename(columns={"text": "discharge_notes"}),
-            on=["subject_id", "hadm_id"], how="left",
-        )
-    else:
-        merged["discharge_notes"] = ""
-
-    # Join ED triage chief complaint via edstays
-    if triage is not None and edstays is not None:
-        stay_complaint = edstays.merge(
-            triage[["subject_id", "stay_id", "chiefcomplaint"]],
-            on=["subject_id", "stay_id"], how="left",
-        )[["subject_id", "hadm_id", "chiefcomplaint"]]
-        merged = merged.merge(stay_complaint, on=["subject_id", "hadm_id"], how="left")
-    else:
-        merged["chiefcomplaint"] = None
-
-    # Keep only rows that have at least one text source
-    has_text = (
-        merged["chiefcomplaint"].notna() |
-        merged["discharge_notes"].notna()
-    )
-    merged = merged[has_text].head(limit)
-
-    logger.info("[LOADER] Local CSV returned %d rows after join", len(merged))
-    return merged.rename(columns={"chiefcomplaint": "triage_complaint"}).to_dict(orient="records")
+    logger.info("[LOADER] BigQuery fetch complete | total rows: %d", len(rows))
+    return rows
 
 
 # -- Record processor ----------------------------------------------------------
@@ -329,15 +226,17 @@ def _process_row(row: dict) -> dict | None:
 
 def _write_to_chroma(records: list[dict], batch_size: int = 200) -> int:
     """Embed and store processed records in ChromaDB. Returns count written."""
+    import chromadb
     from langchain_chroma import Chroma
     from langchain_openai import OpenAIEmbeddings
-    from core.config import CHROMA_PERSIST_DIR, MIMIC_COLLECTION_NAME
+    from core.config import CHROMA_HOST, CHROMA_PORT, MIMIC_COLLECTION_NAME
 
+    chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     store = Chroma(
+        client=chroma_client,
         collection_name=MIMIC_COLLECTION_NAME,
         embedding_function=embeddings,
-        persist_directory=CHROMA_PERSIST_DIR,
     )
 
     texts, metadatas, ids = [], [], []
@@ -375,12 +274,8 @@ def _write_to_chroma(records: list[dict], batch_size: int = 200) -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="Load MIMIC-IV cancer cases into ChromaDB")
-    parser.add_argument("--source", choices=["bigquery", "local"], required=True,
-                        help="Data source: bigquery or local CSV files")
-    parser.add_argument("--project", default=None,
-                        help="GCP project ID (required for --source bigquery)")
-    parser.add_argument("--mimic-dir", default=None,
-                        help="Path to extracted MIMIC-IV directory (required for --source local)")
+    parser.add_argument("--project", required=True,
+                        help="GCP billing project ID (your own, not physionet-data)")
     parser.add_argument("--limit", type=int, default=50000,
                         help="Maximum number of cases to load (default: 50000)")
     parser.add_argument("--dry-run", action="store_true",
@@ -388,14 +283,7 @@ def main():
     args = parser.parse_args()
 
     # Load raw rows
-    if args.source == "bigquery":
-        if not args.project:
-            parser.error("--project is required when --source=bigquery")
-        raw_rows = _load_from_bigquery(args.project, args.limit)
-    else:
-        if not args.mimic_dir:
-            parser.error("--mimic-dir is required when --source=local")
-        raw_rows = _load_from_local(args.mimic_dir, args.limit)
+    raw_rows = _load_from_bigquery(args.project, args.limit)
 
     # Process rows
     records = []

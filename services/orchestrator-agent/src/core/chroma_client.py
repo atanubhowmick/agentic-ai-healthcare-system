@@ -29,23 +29,25 @@ def _get_collections():
         return _diagnosis_collection, _treatment_collection
 
     try:
+        import chromadb
         from langchain_chroma import Chroma
         from langchain_openai import OpenAIEmbeddings
-        from core.config import CHROMA_PERSIST_DIR
+        from core.config import CHROMA_HOST, CHROMA_PORT
 
+        chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
         _diagnosis_collection = Chroma(
+            client=chroma_client,
             collection_name="diagnosis_outcomes",
             embedding_function=embeddings,
-            persist_directory=CHROMA_PERSIST_DIR,
         )
         _treatment_collection = Chroma(
+            client=chroma_client,
             collection_name="treatment_outcomes",
             embedding_function=embeddings,
-            persist_directory=CHROMA_PERSIST_DIR,
         )
-        logger.info("[CHROMA] Collections initialised | persist_dir: %s", CHROMA_PERSIST_DIR)
+        logger.info("[CHROMA] Collections initialised | server: %s:%d", CHROMA_HOST, CHROMA_PORT)
     except Exception as e:
         logger.warning("[CHROMA] Init failed (persistence disabled): %s", str(e))
         _diagnosis_collection = None
