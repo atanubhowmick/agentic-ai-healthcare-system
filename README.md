@@ -7,23 +7,23 @@ A multi-agent AI system for clinical decision support, built with FastAPI and La
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
+┌--------------------------------------------------------------┐
 │                  Agentic AI Healthcare System                │
-├─────────────────────────────────┬────────────────────────────┤
+├---------------------------------┬----------------------------┤
 │       Specialist Agents         │      Support Services      │
 │                                 │                            │
-│  ┌───────────────────────────┐  │  ┌──────────────────────┐  │
+│  ┌---------------------------┐  │  ┌----------------------┐  │
 │  │  Cardiology Agent (:8001) │  │  │  XAI Validation      │  │
-│  │  Neurology Agent  (:8002) │──┼─▶│  Service     (:8004)│  │
+│  │  Neurology Agent  (:8002) │--┼-▶│  Service     (:8004)│  │
 │  │  Cancer Agent (:8003)     |  |  |                      |  |
-   |  Pathology Agent  (:8011) │  │  └──────────────────────┘  │
-│  └───────────────────────────┘  │                            │
-│                                 │  ┌──────────────────────┐  │
-│  ┌───────────────────────────┐  │  │  Treatment Agent     │  │
+   |  Pathology Agent  (:8011) │  │  └----------------------┘  │
+│  └---------------------------┘  │                            │
+│                                 │  ┌----------------------┐  │
+│  ┌---------------------------┐  │  │  Treatment Agent     │  │
 │  │  LangChain ReAct Executor │  │  │             (:8012)  │  │
-│  │  + Conversation Memory    │  │  └──────────────────────┘  │
-│  └───────────────────────────┘  │                            │
-└─────────────────────────────────┴────────────────────────────┘
+│  │  + Conversation Memory    │  │  └----------------------┘  │
+│  └---------------------------┘  │                            │
+└---------------------------------┴----------------------------┘
 ```
 
 ### Services
@@ -38,6 +38,7 @@ A multi-agent AI system for clinical decision support, built with FastAPI and La
 | 6 | **Orchestrator Agent** | LangGraph master agent — triage, ChromaDB cache, retry loops, XAI gating | 8015 |
 | 7 | **XAI Validation Service** | LLM-based clinical safety validation with rule-based checks and SHAP explainability | 8016 |
 | 8 | **Evaluation Service** | System monitoring and metrics calculation | 8017 |
+| 9 | **ChromaDB** | Externalized vector store — shared by all agents for RAG and semantic caching | 8020 |
 
 ---
 
@@ -341,12 +342,71 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8001 --reload
 | Variable | Description | Required By |
 |----------|-------------|-------------|
 | `OPENAI_API_KEY` | OpenAI API key for LLM calls | All services |
+| `CHROMA_DATA_PATH` | Host path where ChromaDB persists its data | ChromaDB server / Docker Compose |
+
+---
+
+## ChromaDB — Externalized Vector Store
+
+ChromaDB runs as a standalone HTTP server (not embedded) so that:
+- All agents share a single vector store instance
+- Data persists across restarts via a bind-mounted host directory
+- The `chroma_data/` folder is excluded from git (too large; ~300 MB after loading MIMIC-IV)
+
+### Running ChromaDB locally (without Docker)
+
+Set the `CHROMA_DATA_PATH` environment variable to your chosen storage directory, then start the server:
+
+```bash
+# Git Bash
+export CHROMA_DATA_PATH="Path_to_Chroma_DB/chroma_data"
+chroma run --host 127.0.0.1 --port 8020 --path "$CHROMA_DATA_PATH"
+```
+
+Verify it is running:
+```bash
+curl http://localhost:8020/api/v1/heartbeat
+```
+
+### ChromaDB collections
+
+| Collection | Used By | Purpose |
+|------------|---------|---------|
+| `mimic_cancer_cases` | Cancer Agent | MIMIC-IV RAG — historical oncology cases for context retrieval |
+| `diagnosis_outcomes` | Orchestrator | Semantic cache of validated diagnoses |
+| `treatment_outcomes` | Orchestrator | Semantic cache of validated treatment plans |
+
+### Loading MIMIC-IV data into ChromaDB
+
+After ChromaDB is running, load oncology cases from BigQuery (requires GCP credentials):
+
+```bash
+cd services/cancer-agent
+python scripts/load_mimic_data.py --project YOUR-GCP-PROJECT-ID --limit 50000
+```
+
+### Reusing locally loaded data with Docker
+
+Set `CHROMA_DATA_PATH` before running Docker Compose so that the container bind-mounts your existing data directory:
+
+```bash
+# Git Bash
+export CHROMA_DATA_PATH="E:/Atanu/Python/LJMU_MS/Database/chroma_data"
+docker-compose up --build
+```
+
+The `docker-compose.yml` maps this path into the ChromaDB container at `/chroma/chroma`, so all previously loaded vectors are immediately available — no reload required.
 
 ---
 
 ## Running with Docker Compose
 
 ```bash
+# Git Bash — with a custom ChromaDB data path (recommended)
+export CHROMA_DATA_PATH="Path_to_Chroma_DB/chroma_data"
+docker-compose up --build
+
+# Default (stores chroma_data in the project directory)
 docker-compose up --build
 ```
 
@@ -356,29 +416,29 @@ docker-compose up --build
 
 ```
 agentic-ai-healthcare-system/
-├── services/
-│   ├── cardiology-agent/
-│   │   └── src/
-│   │       ├── agent/          # LangChain ReAct executor
-│   │       ├── api/            # FastAPI router (server.py)
-│   │       ├── datamodel/      # Pydantic request/response models
-│   │       ├── exception/      # CardiologySvcException + handler
-│   │       ├── service/        # Business logic (cardiology_service.py)
-│   │       ├── log/
-│   │       └── main.py
-│   ├── neurology-agent/        # Same structure; NeurologySvcException
-│   ├── pathology-agent/        # Same structure; PathologySvcException
-│   └── treatment-agent/        # Same structure; TreatmentSvcException
-├── xai-validation-service/
-│   └── src/
-│       ├── api/                # FastAPI router (server.py)
-│       ├── datamodel/          # Validation request/response models
-│       ├── exception/          # ValidationSvcException + handler
-│       ├── explainers/         # SHAP-based explainability (shap_provider.py)
-│       ├── service/            # Business logic (validator_service.py)
-│       ├── validators/         # Rule-based checks + ethical_guard LLM validator
-│       ├── log/
-│       └── main.py
-├── docker-compose.yml
-└── README.md
+├-- services/
+│   ├-- cardiology-agent/
+│   │   └-- src/
+│   │       ├-- agent/          # LangChain ReAct executor
+│   │       ├-- api/            # FastAPI router (server.py)
+│   │       ├-- datamodel/      # Pydantic request/response models
+│   │       ├-- exception/      # CardiologySvcException + handler
+│   │       ├-- service/        # Business logic (cardiology_service.py)
+│   │       ├-- log/
+│   │       └-- main.py
+│   ├-- neurology-agent/        # Same structure; NeurologySvcException
+│   ├-- pathology-agent/        # Same structure; PathologySvcException
+│   └-- treatment-agent/        # Same structure; TreatmentSvcException
+├-- xai-validation-service/
+│   └-- src/
+│       ├-- api/                # FastAPI router (server.py)
+│       ├-- datamodel/          # Validation request/response models
+│       ├-- exception/          # ValidationSvcException + handler
+│       ├-- explainers/         # SHAP-based explainability (shap_provider.py)
+│       ├-- service/            # Business logic (validator_service.py)
+│       ├-- validators/         # Rule-based checks + ethical_guard LLM validator
+│       ├-- log/
+│       └-- main.py
+├-- docker-compose.yml
+└-- README.md
 ```

@@ -31,15 +31,17 @@ def _get_collection():
         return _collection
 
     try:
+        import chromadb
         from langchain_chroma import Chroma
         from langchain_openai import OpenAIEmbeddings
-        from core.config import CHROMA_PERSIST_DIR, MIMIC_COLLECTION_NAME
+        from core.config import CHROMA_HOST, CHROMA_PORT, MIMIC_COLLECTION_NAME
 
+        chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
         _collection = Chroma(
+            client=chroma_client,
             collection_name=MIMIC_COLLECTION_NAME,
             embedding_function=embeddings,
-            persist_directory=CHROMA_PERSIST_DIR,
         )
         has_docs = len(_collection.get(limit=1)["ids"]) > 0
         logger.info("[MIMIC_RETRIEVER] Collection initialised | has_docs: %s", has_docs)

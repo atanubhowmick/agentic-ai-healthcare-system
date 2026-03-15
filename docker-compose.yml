@@ -1,6 +1,16 @@
 version: '3.8'
 
 services:
+  # Infrastructure: ChromaDB Vector Store (shared by all agents)
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8020:8000"
+    volumes:
+      - ${CHROMA_DATA_PATH:-./chroma_data}:/chroma/chroma
+    networks:
+      - healthcare-net
+
   # Infrastructure: Data Persistence (MongoDB)
   mongodb:
     image: mongo:latest
@@ -47,16 +57,16 @@ services:
       - XAI_SERVICE_URL=http://xai-validation-service:8016/xai-validator
       - MONGO_URI=mongodb://mongodb:27017
       - MONGO_DB=agentic_ai_healthcare_db
-      - CHROMA_PERSIST_DIR=/app/chroma_store
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
       - CHROMA_SIMILARITY_THRESHOLD=0.90
       - MAX_RETRY_COUNT=3
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    volumes:
-      - chroma_data:/app/chroma_store
     depends_on:
       - kafka
       - mongodb
+      - chromadb
     networks:
       - healthcare-net
 
@@ -87,6 +97,10 @@ services:
       - "8003:8003"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    depends_on:
+      - chromadb
     networks:
       - healthcare-net
 

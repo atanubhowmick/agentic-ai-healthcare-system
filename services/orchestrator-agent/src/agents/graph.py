@@ -28,7 +28,7 @@ from agents.nodes import (
 )
 
 
-# ── Routing functions ────────────────────────────────────────────────────────
+# -- Routing functions --------------------------------------------------------
 
 def _route_after_chroma_lookup(state: AgentState) -> str:
     """Step 2.1: cache hit → return immediately; miss → full pipeline."""
@@ -87,7 +87,7 @@ def _route_after_xai_treatment(state: AgentState) -> str:
     return "treatment"
 
 
-# ── Graph builder ────────────────────────────────────────────────────────────
+# -- Graph builder ------------------------------------------------------------
 
 def create_orchestrator_graph():
     """
@@ -103,7 +103,7 @@ def create_orchestrator_graph():
     """
     workflow = StateGraph(AgentState)
 
-    # ── Register nodes ────────────────────────────────────────────────────────
+    # -- Register nodes --------------------------------------------------------
     workflow.add_node("chroma_lookup",            chroma_lookup_node)
     workflow.add_node("triage",                   triage_node)
     workflow.add_node("specialist",               specialist_node)
@@ -114,10 +114,10 @@ def create_orchestrator_graph():
     workflow.add_node("xai_treatment_validator",  xai_treatment_validator_node)
     workflow.add_node("finish",                   finish_node)
 
-    # ── Entry point ───────────────────────────────────────────────────────────
+    # -- Entry point -----------------------------------------------------------
     workflow.set_entry_point("chroma_lookup")
 
-    # ── Edges ─────────────────────────────────────────────────────────────────
+    # -- Edges -----------------------------------------------------------------
 
     # Step 2.1: cache hit → finish immediately; miss → proceed to triage
     workflow.add_conditional_edges(

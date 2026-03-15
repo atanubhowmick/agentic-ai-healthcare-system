@@ -41,7 +41,7 @@ from log.logger import logger
 
 _llm = ChatOpenAI(model="gpt-5.2", temperature=0)
 
-# ── Prompts ──────────────────────────────────────────────────────────────────
+# -- Prompts ------------------------------------------------------------------
 
 _TRIAGE_PROMPT = ChatPromptTemplate.from_messages([
     ("system", """You are the Master Orchestrator for an Agentic Healthcare Framework.
@@ -95,7 +95,7 @@ _triage_chain = _TRIAGE_PROMPT | _llm
 _conflict_chain = _CONFLICT_PROMPT | _llm
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# -- Helpers ------------------------------------------------------------------
 
 def _parse_json(content: str) -> dict:
     content = content.strip()
@@ -114,7 +114,7 @@ def _diagnosis_summary(diagnosis: dict) -> str:
     )
 
 
-# ── Nodes ────────────────────────────────────────────────────────────────────
+# -- Nodes --------------------------------------------------------------------
 
 async def chroma_lookup_node(state: AgentState) -> dict:
     """
