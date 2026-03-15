@@ -134,7 +134,19 @@ services:
     networks:
       - healthcare-net
 
-  # 8. Evaluation Service — port 8017
+  # 8. Patient UI — port 8501
+  patient-ui:
+    build: ./patient-ui
+    ports:
+      - "8021:8021"
+    environment:
+      - ORCHESTRATOR_URL=http://orchestrator-agent:8015
+    depends_on:
+      - orchestrator-agent
+    networks:
+      - healthcare-net
+
+  # 9. Evaluation Service — port 8017
   evaluation-service:
     build: ./services/evaluation-service
     ports:
