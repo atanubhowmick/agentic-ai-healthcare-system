@@ -39,6 +39,7 @@ A multi-agent AI system for clinical decision support, built with FastAPI and La
 | 7 | **XAI Validation Service** | LLM-based clinical safety validation with rule-based checks and SHAP explainability | 8016 |
 | 8 | **Evaluation Service** | System monitoring and metrics calculation | 8017 |
 | 9 | **ChromaDB** | Externalized vector store — shared by all agents for RAG and semantic caching | 8020 |
+| 10 | **Patient UI** | Streamlit patient-facing web app — check-in, symptom input, and diagnosis report | 8021 |
 
 ---
 
@@ -310,6 +311,72 @@ All services return a consistent error envelope on failure.
 
 ---
 
+## Patient UI
+
+A Streamlit web application that provides a patient-facing interface to the Agentic AI Healthcare System.
+
+### Pages
+
+| Page | File | Description |
+|------|------|-------------|
+| **Patient Check-in** | `pages/1_patient_login.py` | Entry point — captures Patient ID and Full Name before proceeding |
+| **Diagnosis** | `pages/2_diagnosis.py` | Symptom input form; calls the Orchestrator and renders the full structured report |
+
+### UI Flow
+
+```
+Patient Check-in (Patient ID + Name)
+        │
+        ▼
+Diagnosis Page — symptom text area (max 2 000 chars)
+        │  POST /orchestrator/diagnose
+        ▼
+Diagnosis Report card
+  ├── Status badge (COMPLETED / HUMAN_REVIEW_REQUIRED)
+  ├── Severity + Emergency / Hospitalisation flags
+  ├── Diagnosis Summary + Full Details (expandable)
+  ├── Treatment Recommendations (expandable)
+  ├── XAI Diagnosis Validation (expandable)
+  ├── XAI Treatment Validation (expandable)
+  └── Audit Trail (expandable)
+```
+
+### Components
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `render_banner()` | `components/banner.py` | Blue top-bar with app title; optionally displays patient name and ID |
+| `render_footer()` | `components/banner.py` | Clinical disclaimer footer |
+
+### Running the UI locally
+
+```bash
+cd patient-ui
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/Scripts/activate   # Windows Git Bash
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the app (port 8021)
+bash run.sh
+
+# Or with Streamlit directly
+streamlit run app.py --server.port 8021 --server.address 127.0.0.1
+```
+
+Open `http://localhost:8021` in your browser.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ORCHESTRATOR_URL` | `http://127.0.0.1:8015` | Base URL of the Orchestrator Agent |
+
+---
+
 ## Running Locally
 
 Each service is a standalone FastAPI application. Run from the service's root directory:
@@ -439,6 +506,17 @@ agentic-ai-healthcare-system/
 │       ├-- validators/         # Rule-based checks + ethical_guard LLM validator
 │       ├-- log/
 │       └-- main.py
+├-- patient-ui/
+│   ├-- app.py                 # Entry point — redirects to patient check-in
+│   ├-- run.sh                 # Starts Streamlit on port 8021
+│   ├-- requirements.txt
+│   ├-- components/
+│   │   └-- banner.py          # Shared top-bar and footer components
+│   ├-- constant/
+│   │   └-- constants.py       # ORCHESTRATOR_URL_DEFAULT, MAX_SYMPTOMS_CHARS
+│   └-- pages/
+│       ├-- 1_patient_login.py # Patient Check-in page
+│       └-- 2_diagnosis.py     # Symptom input + diagnosis report page
 ├-- docker-compose.yml
 └-- README.md
 ```
