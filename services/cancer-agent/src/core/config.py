@@ -9,7 +9,7 @@ CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8020"))
 MIMIC_COLLECTION_NAME = "mimic_cancer_cases"
 
 # Minimum cosine similarity to accept a MIMIC case as a strong match (full RAG context).
-MIMIC_SIMILARITY_THRESHOLD = float(os.getenv("MIMIC_SIMILARITY_THRESHOLD", "0.85"))
+MIMIC_SIMILARITY_THRESHOLD = float(os.getenv("MIMIC_SIMILARITY_THRESHOLD", "0.75"))
 
 # Below MIMIC_SIMILARITY_THRESHOLD but above this value → partial context (weaker match).
 # The case is still injected into the prompt but flagged as low-confidence reference.

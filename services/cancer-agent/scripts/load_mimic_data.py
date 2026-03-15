@@ -74,14 +74,14 @@ def _extract_section(note: str, headers: list[str], max_chars: int = 600) -> str
 
 
 def _extract_chief_complaint(note: str) -> str:
-    return _extract_section(note, ["Chief Complaint", "CHIEF COMPLAINT"], max_chars=300)
+    return _extract_section(note, ["Chief Complaint", "CHIEF COMPLAINT"], max_chars=2000)
 
 
 def _extract_hpi(note: str) -> str:
     return _extract_section(
         note,
         ["History of Present Illness", "HISTORY OF PRESENT ILLNESS", "HPI"],
-        max_chars=600,
+        max_chars=2000,
     )
 
 
@@ -89,7 +89,7 @@ def _extract_assessment(note: str) -> str:
     return _extract_section(
         note,
         ["Assessment and Plan", "ASSESSMENT AND PLAN", "Assessment", "ASSESSMENT", "Plan", "PLAN"],
-        max_chars=600,
+        max_chars=2000,
     )
 
 
@@ -109,26 +109,23 @@ def _build_document_text(triage_complaint: str, chief_complaint: str, hpi: str) 
     """
     Build the embedding document — text used for similarity search against user queries.
 
+    Only symptom/presentation text is embedded. The cancer diagnosis is stored
+    in metadata only so it does not dilute symptom-based similarity scores.
+
     Priority:
       1. triage_complaint : patient's own words from ED visit (best semantic match)
       2. chief_complaint + hpi : clinical free text from discharge note
     """
-    # ED triage complaint is closest to natural patient language
-    if triage_complaint and triage_complaint.strip():
-        parts = [f"Patient complaint: {triage_complaint.strip()}"]
-        if chief_complaint:
-            parts.append(f"Chief Complaint: {chief_complaint}")
-        if hpi:
-            parts.append(f"Presentation: {hpi}")
-        return " | ".join(parts)
-
-    # Fall back to discharge note sections
     parts = []
+
+    if triage_complaint and triage_complaint.strip():
+        parts.append(triage_complaint.strip())
     if chief_complaint:
-        parts.append(f"Chief Complaint: {chief_complaint}")
+        parts.append(chief_complaint)
     if hpi:
-        parts.append(f"Presentation: {hpi}")
-    return " | ".join(parts) if parts else ""
+        parts.append(hpi)
+
+    return " ".join(parts) if parts else ""
 
 
 # -- BigQuery source -----------------------------------------------------------
@@ -199,12 +196,12 @@ def _process_row(row: dict) -> dict | None:
     treatment_summary = _extract_assessment(note)
     document_text     = _build_document_text(triage_complaint, chief_complaint, hpi)
 
-    # Last resort fallback: use ICD diagnosis text
+    # Last resort fallback: no symptom text available — use ICD diagnosis title
     if not document_text.strip():
         if cancer_type and cancer_type != "Unknown neoplasm":
-            document_text = f"Oncology patient. Diagnosis: {cancer_type}."
+            document_text = cancer_type
             if icd_codes:
-                document_text += f" ICD-10 codes: {icd_codes}."
+                document_text += f" {icd_codes}"
         else:
             return None   # nothing useful to embed
 
@@ -282,8 +279,11 @@ def main():
                         help="Print first 3 processed records without writing to ChromaDB")
     args = parser.parse_args()
 
+    # Dry-run caps the fetch at 20 rows so it completes quickly
+    limit = 10 if args.dry_run else args.limit
+
     # Load raw rows
-    raw_rows = _load_from_bigquery(args.project, args.limit)
+    raw_rows = _load_from_bigquery(args.project, limit)
 
     # Process rows
     records = []
@@ -298,23 +298,34 @@ def main():
     logger.info("[LOADER] Processed %d records | skipped %d (no usable text)", len(records), skipped)
 
     if args.dry_run:
-        print("\n=== DRY RUN - first 3 records ===")
-        for rec in records[:3]:
-            print(f"\nDocument  : {rec['document'][:300]}")
-            print(f"Cancer    : {rec['cancer_type']}")
-            print(f"ICD codes : {rec['icd_codes']}")
-            print(f"Severity  : {rec['severity']}")
-            print(f"Treatment : {rec['treatment_summary'][:200]}")
-        print(f"\nTotal records ready to write: {len(records)}")
+        logger.info("[DRY RUN] === first %d records ===", len(records[:10]))
+        for i, rec in enumerate(records[:10], start=1):
+            logger.info(
+                "[DRY RUN] Record %d | Cancer: %s | ICD: %s | Severity: %s",
+                i, rec['cancer_type'], rec['icd_codes'], rec['severity'],
+            )
+            logger.info("[DRY RUN]   Document  : %s", rec['document'])
+            logger.info("[DRY RUN]   Treatment : %s", rec['treatment_summary'] or "(none)")
+        logger.info("[DRY RUN] Total records ready to write: %d", len(records))
         return
 
+    # Remove these logs
+    for i, rec in enumerate(records[:10], start=1):
+        logger.info(
+            "[Data Load] Record %d | Cancer: %s | ICD: %s | Severity: %s",
+            i, rec['cancer_type'], rec['icd_codes'], rec['severity'],
+        )
+        logger.info("[Data Load] Document  : %s", rec['document'])
+        logger.info("[Data Load] Treatment : %s", rec['treatment_summary'] or "(none)")
+    logger.info("[Data Load] Total records ready to write: %d", len(records))
+        
     # Write to ChromaDB
     if not records:
         logger.warning("[LOADER] No records to write. Exiting.")
         return
 
     written = _write_to_chroma(records)
-    print(f"\nSuccessfully loaded {written} MIMIC-IV cancer cases into ChromaDB.")
+    logger.info("[LOADER] Successfully loaded %d MIMIC-IV cancer cases into ChromaDB.", written)
 
 
 if __name__ == "__main__":
