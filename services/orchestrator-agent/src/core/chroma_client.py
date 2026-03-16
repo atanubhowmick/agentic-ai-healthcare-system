@@ -37,15 +37,25 @@ def _get_collections():
         chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
+        # When ChromaDB runs as an external HTTP server, langchain-chroma cannot
+        # get the distance metric from the collection metadata. So we supplied
+        # the relevance score function explicitly.
+        # text-embedding-3-small uses cosine distance (range 0–2); convert to
+        # similarity in [0, 1] with:  similarity = 1 - distance / 2
+        def _cosine_relevance_score_fn(distance: float) -> float:
+            return 1.0 - distance / 2.0
+        
         _diagnosis_collection = Chroma(
             client=chroma_client,
             collection_name="diagnosis_outcomes",
             embedding_function=embeddings,
+            relevance_score_fn=_cosine_relevance_score_fn,
         )
         _treatment_collection = Chroma(
             client=chroma_client,
             collection_name="treatment_outcomes",
             embedding_function=embeddings,
+            relevance_score_fn=_cosine_relevance_score_fn,
         )
         logger.info("[CHROMA] Collections initialised | server: %s:%d", CHROMA_HOST, CHROMA_PORT)
     except Exception as e:
@@ -87,6 +97,7 @@ async def lookup_treatment_recommendation(symptoms: str) -> Tuple[bool, Optional
                 "similarity_score": round(score, 4),
                 "specialist_agent": metadata.get("specialist_agent"),
                 "diagnosis_summary": metadata.get("diagnosis_summary"),
+                "severity": metadata.get("severity", "N/A"),
                 "treatment": json.loads(metadata.get("treatment_json", "{}")),
             }
             logger.info(

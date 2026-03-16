@@ -140,13 +140,19 @@ async def chroma_lookup_node(state: AgentState) -> dict:
             "specialist_agent": specialist,
             "diagnosis": {
                 "summary": cached.get("diagnosis_summary", "Cached result — see treatment"),
-                "severity": "N/A",
+                "severity": cached.get("severity", "N/A"),
                 "emergency_care_needed": "N/A",
                 "hospitalization_needed": "N/A",
                 "full_details": {},
             },
             "xai_diagnosis_validation": None,
-            "treatment": cached.get("treatment"),
+            # Wrap in the same envelope the treatment agent returns so the UI
+            # can render it identically to a non-cached response.
+            "treatment": {
+                "agent": "Treatment_Care_Agent",
+                "agent_id": "TREAT-AGENT-CACHE",
+                "treatment": cached.get("treatment"),
+            },
             "xai_treatment_validation": None,
             "conflict_detected": False,
             "conflict_reason": "",

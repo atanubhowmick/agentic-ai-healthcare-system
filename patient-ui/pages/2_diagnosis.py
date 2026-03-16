@@ -223,7 +223,7 @@ with center_col:
         st.markdown("#### Diagnosis Report")
 
         badge_class = (
-            "badge-completed" if status == "COMPLETED"
+            "badge-completed" if status in ("COMPLETED", "COMPLETED_FROM_CACHE")
             else "badge-review" if status == "HUMAN_REVIEW_REQUIRED"
             else "badge-unknown"
         )
