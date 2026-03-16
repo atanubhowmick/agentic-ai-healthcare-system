@@ -11,3 +11,8 @@ motor
 pymongo
 aiokafka
 python-dotenv
+sentence-transformers
+torch
+transformers
+scikit-learn
+accelerate
