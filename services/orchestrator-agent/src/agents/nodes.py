@@ -31,6 +31,7 @@ from tools.cancer_client import call_cancer_api
 from tools.treatment_client import call_treatment_api
 from tools.xai_client import call_validate_diagnosis, call_validate_treatment
 from core.config import MAX_RETRY_COUNT
+from agents.triage_router import route_symptoms
 from core.mongo_client import save_case
 from core.chroma_client import (
     lookup_treatment_recommendation,
@@ -42,30 +43,6 @@ from log.logger import logger
 _llm = ChatOpenAI(model="gpt-5.2", temperature=0)
 
 # -- Prompts ------------------------------------------------------------------
-
-_TRIAGE_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", """You are the Master Orchestrator for an Agentic Healthcare Framework.
-Triage patient symptoms and route to the most appropriate medical specialist.
-
-Available specialists:
-- cardiology  : heart/cardiovascular symptoms (chest pain, palpitations, hypertension, shortness of breath with cardiac indicators, arrhythmia)
-- neurology   : neurological symptoms (headaches, seizures, memory loss, tremors, numbness, paralysis, dizziness, cognitive decline)
-- cancer      : oncology symptoms (unexplained weight loss, persistent lumps/masses, abnormal bleeding, chronic fatigue with suspected malignancy, elevated tumour markers)
-- pathology   : lab/test-result queries, blood disorders, metabolic issues, infections without a clear cardiac, neurological, or oncological focus
-
-Also determine whether a secondary pathology cross-check is warranted:
-Set secondary_check_needed=true when the case involves cardiology, neurology, or cancer AND
-the symptoms suggest significant lab abnormalities (e.g. elevated enzymes, abnormal CBC, high tumour markers).
-
-Respond ONLY with valid JSON (no markdown):
-{{
-    "specialist": "cardiology",
-    "secondary_check_needed": false,
-    "reasoning": "one-sentence rationale"
-}}
-specialist must be one of: cardiology, neurology, cancer, pathology, unknown"""),
-    ("human", "Patient symptoms: {symptoms}"),
-])
 
 _CONFLICT_PROMPT = ChatPromptTemplate.from_messages([
     ("system", """You are a medical conflict resolution specialist.
@@ -91,7 +68,6 @@ Secondary Assessment ({secondary_agent}):
 Severity: {secondary_severity}"""),
 ])
 
-_triage_chain = _TRIAGE_PROMPT | _llm
 _conflict_chain = _CONFLICT_PROMPT | _llm
 
 
@@ -140,13 +116,19 @@ async def chroma_lookup_node(state: AgentState) -> dict:
             "specialist_agent": specialist,
             "diagnosis": {
                 "summary": cached.get("diagnosis_summary", "Cached result — see treatment"),
-                "severity": "N/A",
+                "severity": cached.get("severity", "N/A"),
                 "emergency_care_needed": "N/A",
                 "hospitalization_needed": "N/A",
                 "full_details": {},
             },
             "xai_diagnosis_validation": None,
-            "treatment": cached.get("treatment"),
+            # Wrap in the same envelope the treatment agent returns so the UI
+            # can render it identically to a non-cached response.
+            "treatment": {
+                "agent": "Treatment_Care_Agent",
+                "agent_id": "TREAT-AGENT-CACHE",
+                "treatment": cached.get("treatment"),
+            },
             "xai_treatment_validation": None,
             "conflict_detected": False,
             "conflict_reason": "",
@@ -174,16 +156,12 @@ async def chroma_lookup_node(state: AgentState) -> dict:
 
 
 async def triage_node(state: AgentState) -> dict:
-    """LLM-based medical triage: determines specialist and secondary check need."""
+    """Hybrid triage: Rule → BioBERT → ClinicalBERT → LLM fallback."""
     symptoms = state.get("symptoms", "")
     logger.info("[TRIAGE] patient: %s | symptoms: %.100s...", state.get("patient_id"), symptoms)
 
     try:
-        result = _triage_chain.invoke({"symptoms": symptoms})
-        raw = _parse_json(result.content)
-        specialist = raw.get("specialist", "unknown").lower().strip()
-        secondary_needed = bool(raw.get("secondary_check_needed", False))
-        reasoning = raw.get("reasoning", "")
+        specialist, secondary_needed, reasoning = await route_symptoms(symptoms)
 
         if specialist not in ("cardiology", "neurology", "cancer", "pathology"):
             specialist = "unknown"
