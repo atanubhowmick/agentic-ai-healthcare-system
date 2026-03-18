@@ -51,9 +51,8 @@ _, col, _ = st.columns([1, 2, 1])
 with col:
     st.markdown("#### Patient Check-in")
     st.caption(
-        "Note: In an Enterprise application, this screen will be replaced by a "
-        "secure patient login flow. All the patient details will be captured based "
-        "on login credential."
+        "Note: In an Enterprise application, this screen will be replaced by a secure patient login flow. "
+        "All the patient details will be captured based on login credential and remain confidential."
     )
 
     with st.form("patient_checkin_form"):
