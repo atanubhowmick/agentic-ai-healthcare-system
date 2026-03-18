@@ -11,20 +11,20 @@ it via the CLINICALBERT_MODEL_DIR env var (default: ./clinicalbert_router).
 Usage examples
 --------------
 # Both CSVs (recommended — 6000+ balanced examples)
-python train_triage_classifier.py \\
+python services/orchestrator-agent/src/training/train_clinicalbert_classifier.py \\
     --triage-csv  /data/triage_training_data.csv \\
     --disease-csv "/data/Disease and symptoms dataset.csv"
 
 # Disease CSV only
-python train_triage_classifier.py \\
+python services/orchestrator-agent/src/training/train_clinicalbert_classifier.py \\
     --disease-csv "/data/Disease and symptoms dataset.csv"
 
 # Triage CSV only (small dataset, useful for quick smoke-test)
-python train_triage_classifier.py \\
+python services/orchestrator-agent/src/training/train_clinicalbert_classifier.py \\
     --triage-csv /data/triage_training_data.csv
 
 # Full control
-python train_triage_classifier.py \\
+python services/orchestrator-agent/src/training/train_clinicalbert_classifier.py \\
     --triage-csv    /data/triage_training_data.csv \\
     --disease-csv   "/data/Disease and symptoms dataset.csv" \\
     --output-dir    services/orchestrator-agent/clinicalbert_router \\
@@ -73,7 +73,7 @@ log = logging.getLogger("train_triage")
 # ---------------------------------------------------------------------------
 
 _BASE_MODEL  = "emilyalsentzer/Bio_ClinicalBERT"
-_MAX_LENGTH  = 128
+_MAX_LENGTH  = 64
 _RANDOM_SEED = 42
 
 LABEL2ID: dict[str, int] = {
@@ -339,9 +339,10 @@ def train_and_save(
 # ---------------------------------------------------------------------------
 
 def _default_output_dir() -> str:
+    # src/training/ -> src/ -> orchestrator-agent/ -> clinicalbert_router/
     return os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        "services", "orchestrator-agent", "clinicalbert_router",
+        "..", "..", "clinicalbert_router",
     )
 
 
