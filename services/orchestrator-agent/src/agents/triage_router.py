@@ -200,17 +200,12 @@ def _load_clinicalbert_classifier(model_dir: str) -> bool:
     """
     global _clinicalbert_tokenizer, _clinicalbert_clf, _clinicalbert_available
     if not os.path.isdir(model_dir):
-        logger.info(
-            "[TRIAGE_ROUTER] ClinicalBERT model not found at '%s' — "
-            "starting auto-training (this runs once and takes a few minutes)...",
+        logger.warning(
+            "[TRIAGE_ROUTER] ClinicalBERT model not found at '%s'. "
+            "Run train_triage_classifier.py to generate it. Tier 3 will be skipped.",
             model_dir,
         )
-        try:
-            from agents.clinicalbert_trainer import train_and_save
-            train_and_save(model_dir)
-        except Exception as e:
-            logger.error("[TRIAGE_ROUTER] ClinicalBERT auto-training failed: %s. Tier 3 will be skipped.", str(e))
-            return False
+        return False
     logger.info("[TRIAGE_ROUTER] Loading fine-tuned ClinicalBERT from: %s", model_dir)
     _clinicalbert_tokenizer = AutoTokenizer.from_pretrained(model_dir)
     _clinicalbert_clf = AutoModelForSequenceClassification.from_pretrained(model_dir)
