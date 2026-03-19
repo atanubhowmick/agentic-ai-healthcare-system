@@ -1,54 +1,69 @@
+"""
+Neurology Agent - DeepAgent-based implementation.
+
+Architecture:
+  - Uses deepagents.create_deep_agent (built on LangGraph) as the executor.
+  - @tool decorator exposes the response schema to the agent.
+  - SystemMessage / HumanMessage used for explicit message construction.
+
+Public interface (used by neurology_service.py):
+  neurology_executor  - the raw DeepAgent instance
+  BASE_SYSTEM         - system prompt (used by service to build messages)
+"""
+
+from langchain.tools import tool
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnableWithMessageHistory
-from langchain_community.chat_message_histories import ChatMessageHistory
+from deepagents import create_deep_agent
+
+from core.config import OPENAI_MODEL
 from log.logger import logger
 
-# 1. Define the Specialist Prompt
-prompt = ChatPromptTemplate.from_messages([
-    ("system", """You are a specialized Neurology AI Agent. Your goal is to provide diagnostic insights
-               based on neurological symptoms and clinical indicators. Always be very precise and cite
-               specific neurological markers such as reflexes, cognitive assessments, CSF analysis,
-               EEG patterns and MRI/CT findings. Provide the response in the JSON format:
-               {{
-                   "diagnosisDetails": "Within 200 words",
-                   "severity": "LOW/HIGH/CRITICAL",
-                   "hospitalizationNeeded": "YES/NO",
-                   "clarificationQuestion": "any clarification question you have within 100 words",
-                   "emergencyCareNeeded": "YES/NO",
-                   "bloodTestsRequired": ["All the blood tests needed in list"],
-                   "imagingRequired": ["MRI, CT scan, PET scan or other imaging required"],
-                   "neurologicalTestsRequired": ["EEG, nerve conduction study, lumbar puncture etc"],
-                   "medication": "Any medication to take? if yes please provide medicine name and dosages"
-                }}"""),
-    MessagesPlaceholder(variable_name="chat_history"),
-    ("human", "{input}"),
-])
 
-# 2. Initialize LLM and chain
-logger.debug("Initializing Neurology LLM and chain")
-llm = ChatOpenAI(model="gpt-5.2", temperature=0)
-neurology_chain = prompt | llm
-logger.debug("Neurology chain initialized successfully")
+# -- JSON response schema -------------------------------------------------------
 
-# 3. Session store for chat history
-_session_store: dict = {}
+_JSON_SCHEMA = """
+{
+    "diagnosisDetails": "Detailed neurological assessment within 200 words",
+    "severity": "LOW/HIGH/CRITICAL",
+    "hospitalizationNeeded": "YES/NO",
+    "emergencyCareNeeded": "YES/NO",
+    "clarificationQuestion": "Any clarification question within 100 words",
+    "bloodTestsRequired": ["All blood tests needed e.g. CBC, metabolic panel, thyroid function"],
+    "imagingRequired": ["MRI brain/spine, CT scan, PET scan or other imaging required"],
+    "neurologicalTestsRequired": ["EEG, nerve conduction study, lumbar puncture, EMG etc"],
+    "medication": "Medication name and dosages if applicable, otherwise NONE"
+}"""
 
-def _get_session_history(session_id: str) -> ChatMessageHistory:
-    if session_id not in _session_store:
-        logger.debug("Creating new chat history for session: %s", session_id)
-        _session_store[session_id] = ChatMessageHistory()
-    else:
-        logger.debug("Reusing existing chat history for session: %s | messages in history: %d",
-                     session_id, len(_session_store[session_id].messages))
-    return _session_store[session_id]
-
-# 4. Chain with message history
-logger.debug("Wrapping chain with RunnableWithMessageHistory")
-neurology_executor = RunnableWithMessageHistory(
-    neurology_chain,
-    _get_session_history,
-    input_messages_key="input",
-    history_messages_key="chat_history",
+BASE_SYSTEM = (
+    "You are a specialized Neurology AI Agent. Your goal is to provide diagnostic insights "
+    "based on neurological symptoms and clinical indicators. Always be very precise and cite "
+    "specific neurological markers such as reflexes, cognitive assessments, CSF analysis, "
+    "EEG patterns and MRI/CT findings. "
+    "Provide the response strictly in the following JSON format:" + _JSON_SCHEMA
 )
-logger.debug("Neurology executor ready")
+
+
+# -- Tools ----------------------------------------------------------------------
+
+@tool
+def get_neurology_response_schema() -> str:
+    """Return the required JSON response schema for neurology diagnosis output.
+    Call this tool whenever you need a reminder of the exact JSON format expected."""
+    return _JSON_SCHEMA
+
+
+# -- LLM ------------------------------------------------------------------------
+
+logger.debug("Initializing Neurology LLM | model: %s", OPENAI_MODEL)
+_llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
+
+
+# -- DeepAgent ------------------------------------------------------------------
+
+logger.debug("Building Neurology DeepAgent")
+neurology_executor = create_deep_agent(
+    model=_llm,
+    tools=[get_neurology_response_schema],
+    system_prompt=BASE_SYSTEM,
+)
+logger.debug("Neurology DeepAgent ready")

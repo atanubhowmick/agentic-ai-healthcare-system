@@ -9,6 +9,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 8011
+EXPOSE 8002
 
-CMD ["uvicorn", "main:app", "--app-dir", "./src", "--host", "0.0.0.0", "--port", "8011"]
+CMD ["uvicorn", "main:app", "--app-dir", "./src", "--host", "0.0.0.0", "--port", "8002"]

@@ -4,14 +4,14 @@ fastapi[standard]>=0.115.0
 # Data validation
 pydantic>=2.10.0
 
-# LangChain ecosystem (latest stable - March 2026)
+# LangChain ecosystem
 langchain>=1.2.12
 langchain-core>=1.2.20
 langchain-openai>=1.1.10
 langchain-community>=0.4.1
 langchain-chroma>=1.1.0
 
-# LangGraph - agentic graph runtime (required by deepagents)
+# LangGraph - agentic graph runtime 
 langgraph>=1.1.2
 
 # DeepAgent framework (built on LangGraph)

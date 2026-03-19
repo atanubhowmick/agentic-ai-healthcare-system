@@ -3,7 +3,7 @@ from schemas.request import OrchestratorRequest
 from schemas.response import OrchestratorResponse, DiagnosisDetail, GenericResponse
 from agents.graph import create_orchestrator_graph
 from core.exceptions import GraphExecutionException
-from constants import ORCHESTRATOR_AGENT_ID
+from core.config import ORCHESTRATOR_AGENT_ID
 from log.logger import logger
 
 router = APIRouter(prefix="/orchestrator")
