@@ -1,6 +1,20 @@
-fastapi[standard]
-pydantic
-langchain
-langchain-openai
-langchain-community
-python-dotenv
+# Web framework
+fastapi[standard]>=0.115.0
+
+# Data validation
+pydantic>=2.10.0
+
+# LangChain ecosystem
+langchain>=1.2.12
+langchain-core>=1.2.20
+langchain-openai>=1.1.10
+langchain-community>=0.4.1
+
+# LangGraph - agentic graph runtime
+langgraph>=1.1.2
+
+# DeepAgent framework (built on LangGraph)
+deepagents>=0.4.11
+
+# Utilities
+python-dotenv>=1.2.0

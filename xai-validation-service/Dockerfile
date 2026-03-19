@@ -1,0 +1,14 @@
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8016
+
+CMD ["uvicorn", "main:app", "--app-dir", "./src", "--host", "0.0.0.0", "--port", "8016"]

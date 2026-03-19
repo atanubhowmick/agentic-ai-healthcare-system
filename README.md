@@ -16,7 +16,7 @@ A multi-agent AI system for clinical decision support, built with FastAPI and La
 │  │  Cardiology Agent (:8001) │  │  │  XAI Validation      │  │
 │  │  Neurology Agent  (:8002) │--┼-▶│  Service     (:8004)│  │
 │  │  Cancer Agent (:8003)     |  |  |                      |  |
-   |  Pathology Agent  (:8011) │  │  └----------------------┘  │
+|  |  Pathology Agent  (:8011) │  │  └----------------------┘  │
 │  └---------------------------┘  │                            │
 │                                 │  ┌----------------------┐  │
 │  ┌---------------------------┐  │  │  Treatment Agent     │  │
@@ -32,18 +32,18 @@ A multi-agent AI system for clinical decision support, built with FastAPI and La
 |---|---------|-------------|------|
 | 1 | **Cardiology Agent** | Analyses cardiac symptoms, flags anomalies, recommends cardiac workup | 8001 |
 | 2 | **Neurology Agent** | Analyses neurological symptoms, recommends imaging and neurological tests | 8002 |
-| 3 | **Cancer Agent** | Oncology assessment — TNM staging, tumour markers, biopsy and imaging guidance | 8003 |
+| 3 | **Cancer Agent** | Oncology assessment - TNM staging, tumour markers, biopsy and imaging guidance | 8003 |
 | 4 | **Pathology Agent** | Analyses lab results and biomarker abnormalities | 8011 |
 | 5 | **Treatment Agent** | Generates comprehensive treatment and patient care plans | 8012 |
-| 6 | **Orchestrator Agent** | LangGraph master agent — triage, ChromaDB cache, retry loops, XAI gating | 8015 |
+| 6 | **Orchestrator Agent** | LangGraph master agent - triage, ChromaDB cache, retry loops, XAI gating | 8015 |
 | 7 | **XAI Validation Service** | LLM-based clinical safety validation with rule-based checks and SHAP explainability | 8016 |
 | 8 | **Evaluation Service** | System monitoring and metrics calculation | 8017 |
-| 9 | **ChromaDB** | Externalized vector store — shared by all agents for RAG and semantic caching | 8020 |
-| 10 | **Patient UI** | Streamlit patient-facing web app — check-in, symptom input, and diagnosis report | 8021 |
+| 9 | **ChromaDB** | Externalized vector store - shared by all agents for RAG and semantic caching | 8020 |
+| 10 | **Patient UI** | Streamlit patient-facing web app - check-in, symptom input, and diagnosis report | 8021 |
 
 ---
 
-## Swagger / OpenAPI URLs
+## Swagger / OpenAPI / UI URLs
 
 Each service exposes interactive API documentation via FastAPI's built-in Swagger UI and ReDoc.
 
@@ -57,12 +57,14 @@ Each service exposes interactive API documentation via FastAPI's built-in Swagge
 | Orchestrator Svc | http://localhost:8015/docs | http://localhost:8015/redoc |
 | XAI Validation Service | http://localhost:8016/docs | http://localhost:8016/redoc |
 | Evaluation Service | http://localhost:8017/docs | http://localhost:8017/redoc |
+| ChromaDB | http://localhost:8020/docs | http://localhost:8020/redoc |
+| Patient UI | http://localhost:8021 | - |
 
 ---
 
 ## API Endpoints
 
-### Cardiology Agent — `http://localhost:8001`
+### Cardiology Agent - `http://localhost:8001`
 
 #### `POST /cardiology-agent/diagnose`
 Analyse cardiac symptoms for a patient.
@@ -99,7 +101,7 @@ Analyse cardiac symptoms for a patient.
 
 ---
 
-### Pathology Agent — `http://localhost:8011`
+### Pathology Agent - `http://localhost:8011`
 
 #### `POST /pathology-agent/diagnose`
 Analyse laboratory results and biomarker data.
@@ -136,7 +138,7 @@ Analyse laboratory results and biomarker data.
 
 ---
 
-### Treatment Agent — `http://localhost:8012`
+### Treatment Agent - `http://localhost:8012`
 
 #### `POST /treatment-agent/recommend`
 Generate a treatment and patient care plan based on a specialist diagnosis.
@@ -146,7 +148,7 @@ Generate a treatment and patient care plan based on a specialist diagnosis.
 {
   "patient_id": "P001",
   "diagnosis": "Acute STEMI with cardiogenic shock",
-  "specialist_notes": "Cardiology_Specialist — hospitalization required, emergency care needed",
+  "specialist_notes": "Cardiology_Specialist - hospitalization required, emergency care needed",
   "is_followup": false
 }
 ```
@@ -174,7 +176,7 @@ Generate a treatment and patient care plan based on a specialist diagnosis.
 
 ---
 
-### XAI Validation Service — `http://localhost:8016`
+### XAI Validation Service - `http://localhost:8016`
 
 #### `POST /xai-validator/validate-diagnosis`
 Validate a specialist diagnosis against clinical safety rules and LLM-based ethical checks.
@@ -221,7 +223,7 @@ Validate a treatment plan for clinical appropriateness and safety.
 {
   "patient_id": "P001",
   "specialist_agent": "Cardiology_Specialist",
-  "diagnosis_summary": "Suspected STEMI — emergency care required",
+  "diagnosis_summary": "Suspected STEMI - emergency care required",
   "severity": "HIGH",
   "treatment_recommendation": "PCI within 90 minutes, dual antiplatelet therapy"
 }
@@ -249,7 +251,7 @@ Validate a treatment plan for clinical appropriateness and safety.
 
 ---
 
-### Neurology Agent — `http://localhost:8002`
+### Neurology Agent - `http://localhost:8002`
 
 #### `POST /neurology-agent/diagnose`
 Analyse neurological symptoms and recommend imaging and neurological tests.
@@ -319,7 +321,7 @@ A Streamlit web application that provides a patient-facing interface to the Agen
 
 | Page | File | Description |
 |------|------|-------------|
-| **Patient Check-in** | `pages/1_patient_login.py` | Entry point — captures Patient ID and Full Name before proceeding |
+| **Patient Check-in** | `pages/1_patient_login.py` | Entry point - captures Patient ID and Full Name before proceeding |
 | **Diagnosis** | `pages/2_diagnosis.py` | Symptom input form; calls the Orchestrator and renders the full structured report |
 
 ### UI Flow
@@ -328,7 +330,7 @@ A Streamlit web application that provides a patient-facing interface to the Agen
 Patient Check-in (Patient ID + Name)
         │
         ▼
-Diagnosis Page — symptom text area (max 2 000 chars)
+Diagnosis Page - symptom text area (max 2 000 chars)
         │  POST /orchestrator/diagnose
         ▼
 Diagnosis Report card
@@ -413,7 +415,7 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8001 --reload
 
 ---
 
-## ChromaDB — Externalized Vector Store
+## ChromaDB - Externalized Vector Store
 
 ChromaDB runs as a standalone HTTP server (not embedded) so that:
 - All agents share a single vector store instance
@@ -439,7 +441,7 @@ curl http://localhost:8020/api/v1/heartbeat
 
 | Collection | Used By | Purpose |
 |------------|---------|---------|
-| `mimic_cancer_cases` | Cancer Agent | MIMIC-IV RAG — historical oncology cases for context retrieval |
+| `mimic_cancer_cases` | Cancer Agent | MIMIC-IV RAG - historical oncology cases for context retrieval |
 | `diagnosis_outcomes` | Orchestrator | Semantic cache of validated diagnoses |
 | `treatment_outcomes` | Orchestrator | Semantic cache of validated treatment plans |
 
@@ -462,14 +464,14 @@ export CHROMA_DATA_PATH="E:/Atanu/Python/LJMU_MS/Database/chroma_data"
 docker-compose up --build
 ```
 
-The `docker-compose.yml` maps this path into the ChromaDB container at `/chroma/chroma`, so all previously loaded vectors are immediately available — no reload required.
+The `docker-compose.yml` maps this path into the ChromaDB container at `/chroma/chroma`, so all previously loaded vectors are immediately available - no reload required.
 
 ---
 
 ## Running with Docker Compose
 
 ```bash
-# Git Bash — with a custom ChromaDB data path (recommended)
+# Git Bash - with a custom ChromaDB data path (recommended)
 export CHROMA_DATA_PATH="Path_to_Chroma_DB/chroma_data"
 docker-compose up --build
 
@@ -483,40 +485,124 @@ docker-compose up --build
 
 ```
 agentic-ai-healthcare-system/
-├-- services/
-│   ├-- cardiology-agent/
-│   │   └-- src/
-│   │       ├-- agent/          # LangChain ReAct executor
-│   │       ├-- api/            # FastAPI router (server.py)
-│   │       ├-- datamodel/      # Pydantic request/response models
-│   │       ├-- exception/      # CardiologySvcException + handler
-│   │       ├-- service/        # Business logic (cardiology_service.py)
-│   │       ├-- log/
-│   │       └-- main.py
-│   ├-- neurology-agent/        # Same structure; NeurologySvcException
-│   ├-- pathology-agent/        # Same structure; PathologySvcException
-│   └-- treatment-agent/        # Same structure; TreatmentSvcException
-├-- xai-validation-service/
-│   └-- src/
-│       ├-- api/                # FastAPI router (server.py)
-│       ├-- datamodel/          # Validation request/response models
-│       ├-- exception/          # ValidationSvcException + handler
-│       ├-- explainers/         # SHAP-based explainability (shap_provider.py)
-│       ├-- service/            # Business logic (validator_service.py)
-│       ├-- validators/         # Rule-based checks + ethical_guard LLM validator
-│       ├-- log/
-│       └-- main.py
-├-- patient-ui/
-│   ├-- app.py                 # Entry point — redirects to patient check-in
-│   ├-- run.sh                 # Starts Streamlit on port 8021
-│   ├-- requirements.txt
-│   ├-- components/
-│   │   └-- banner.py          # Shared top-bar and footer components
-│   ├-- constant/
-│   │   └-- constants.py       # ORCHESTRATOR_URL_DEFAULT, MAX_SYMPTOMS_CHARS
-│   └-- pages/
-│       ├-- 1_patient_login.py # Patient Check-in page
-│       └-- 2_diagnosis.py     # Symptom input + diagnosis report page
-├-- docker-compose.yml
-└-- README.md
+├── services/
+│   │
+│   ├── cardiology-agent/           # Cardiology Specialist - port 8001
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── src/
+│   │       ├── agent/              # DeepAgent executor + @tool (cardiology_agent.py)
+│   │       ├── api/                # FastAPI router (server.py)
+│   │       ├── core/               # config.py - OPENAI_DEFAULT_MODEL env var
+│   │       ├── datamodel/          # Pydantic request/response models
+│   │       ├── exception/          # CardiologySvcException + handler
+│   │       ├── service/            # Business logic (cardiology_service.py)
+│   │       ├── log/
+│   │       └── main.py
+│   │
+│   ├── neurology-agent/            # Neurology Specialist - port 8002
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── src/
+│   │       ├── agent/              # DeepAgent executor + @tool (neurology_agent.py)
+│   │       ├── api/                # FastAPI router (server.py)
+│   │       ├── core/               # config.py - OPENAI_DEFAULT_MODEL env var
+│   │       ├── datamodel/          # Pydantic request/response models
+│   │       ├── exception/          # NeurologySvcException + handler
+│   │       ├── service/            # Business logic (neurology_service.py)
+│   │       ├── log/
+│   │       └── main.py
+│   │
+│   ├── cancer-agent/               # Cancer / Oncology Specialist - port 8003
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── src/
+│   │       ├── agent/              # DeepAgent + @tool: search_mimic_cases (cancer_agent.py)
+│   │       ├── api/                # FastAPI router (server.py)
+│   │       ├── core/               # config.py - OPENAI_DEFAULT_MODEL, CHROMA_* env vars
+│   │       ├── datamodel/          # Pydantic request/response models
+│   │       ├── exception/          # CancerSvcException + handler
+│   │       ├── rag/                # MIMIC-IV ChromaDB retriever (mimic_retriever.py)
+│   │       ├── service/            # Business logic (cancer_service.py)
+│   │       ├── log/
+│   │       └── main.py
+│   │
+│   ├── pathology-agent/            # Pathology Specialist - port 8011
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── src/
+│   │       ├── agent/              # DeepAgent executor + @tool (pathology_agent.py)
+│   │       ├── api/                # FastAPI router (server.py)
+│   │       ├── constant/           # constants.py - PATHOLOGY_AGENT_ID
+│   │       ├── core/               # config.py - OPENAI_DEFAULT_MODEL env var
+│   │       ├── datamodel/          # Pydantic request/response models
+│   │       ├── exception/          # PathologySvcException + handler
+│   │       ├── service/            # Business logic (pathology_service.py)
+│   │       ├── log/
+│   │       └── main.py
+│   │
+│   ├── treatment-agent/            # Treatment & Patient Care Agent - port 8012
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── src/
+│   │       ├── agent/              # LangChain LLM executor (treatment_agent.py)
+│   │       ├── api/                # FastAPI router (server.py)
+│   │       ├── datamodel/          # Pydantic request/response models
+│   │       ├── exception/          # TreatmentSvcException + handler
+│   │       ├── service/            # Business logic (treatment_service.py)
+│   │       ├── log/
+│   │       └── main.py
+│   │
+│   ├── orchestrator-agent/         # Router / Master Agent - port 8015
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── src/
+│   │       ├── agents/             # triage_router.py - ClinicalBERT/BioBERT classifier
+│   │       ├── api/                # FastAPI router (server.py)
+│   │       ├── core/               # config.py - service URLs, Chroma, Mongo env vars
+│   │       ├── exception/          # OrchestratorSvcException + handler
+│   │       ├── schemas/            # Shared request/response schemas
+│   │       ├── tools/              # HTTP client wrappers for specialist agents
+│   │       ├── training/           # BERT model training scripts
+│   │       ├── log/
+│   │       ├── constants.py
+│   │       └── main.py
+│   │
+│   └── evaluation-service/         # Metrics & Evaluation Service - port 8017
+│       ├── Dockerfile
+│       ├── requirements.txt
+│       └── src/
+│           ├── metrics_calculator.py
+│           ├── system_monitor.py
+│           └── main.py
+│
+├── xai-validation-service/         # XAI & Ethical Validator - port 8016
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── src/
+│       ├── api/                    # FastAPI router (server.py)
+│       ├── datamodel/              # Validation request/response models
+│       ├── exception/              # ValidationSvcException + handler
+│       ├── explainers/             # SHAP-based explainability (shap_provider.py)
+│       ├── service/                # Business logic (validator_service.py)
+│       ├── validators/             # Rule-based checks + ethical_guard LLM validator
+│       ├── log/
+│       ├── constants.py
+│       └── main.py
+│
+├── patient-ui/                     # Patient-facing Streamlit Web App - port 8021
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── app.py                      # Entry point - redirects to patient check-in
+│   ├── run.sh                      # Starts Streamlit on port 8021
+│   ├── components/
+│   │   └── banner.py               # Shared top-bar and footer components
+│   ├── constant/
+│   │   └── constants.py            # ORCHESTRATOR_URL_DEFAULT, MAX_SYMPTOMS_CHARS
+│   └── pages/
+│       ├── 1_patient_login.py      # Patient check-in page
+│       └── 2_diagnosis.py          # Symptom input + diagnosis report page
+│
+├── docker-compose.yml              # Full stack orchestration (all services + infra)
+└── README.md
 ```

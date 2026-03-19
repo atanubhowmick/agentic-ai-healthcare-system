@@ -1,54 +1,108 @@
-version: '3.8'
-
 services:
-  # Infrastructure: ChromaDB Vector Store (shared by all agents)
+
+  # -- Infrastructure --------------------------------------------------------
+
+  # ChromaDB Vector Store - shared by cancer-agent and orchestrator for RAG
+  # Data is persisted to the host path set by $CHROMA_DATA_PATH (required).
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:1.5.5
     ports:
       - "8020:8000"
     volumes:
-      - ${CHROMA_DATA_PATH:-./chroma_data}:/chroma/chroma
+      - ${CHROMA_DATA_PATH}:/chroma/chroma
     networks:
       - healthcare-net
 
-  # Infrastructure: Data Persistence (MongoDB)
+  # MongoDB - persistent storage for patient records and session data
   mongodb:
     image: mongo:latest
+    command: ["mongod", "--quiet"]
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - healthcare-net
 
-  # Infrastructure: Asynchronous Messaging (Kafka)
-  zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-    networks:
-      - healthcare-net
 
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    depends_on:
-      - zookeeper
+  # -- Specialist Agents -----------------------------------------------------
+
+  # 1. Cardiology Specialist Agent - port 8001
+  cardiology-agent:
+    build: ./services/cardiology-agent
     ports:
-      - "9092:9092"
+      - "8001:8001"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
     networks:
       - healthcare-net
 
-  # 1. Orchestrator Agent (The Router / Master Agent) — port 8015
+  # 2. Neurology Specialist Agent - port 8002
+  neurology-agent:
+    build: ./services/neurology-agent
+    ports:
+      - "8002:8002"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
+    networks:
+      - healthcare-net
+
+  # 3. Cancer Oncology Specialist Agent - port 8003
+  cancer-agent:
+    build: ./services/cancer-agent
+    ports:
+      - "8003:8003"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    depends_on:
+      chromadb:
+        condition: service_started
+    networks:
+      - healthcare-net
+
+  # 4. Pathology Specialist Agent - port 8011
+  pathology-agent:
+    build: ./services/pathology-agent
+    ports:
+      - "8011:8011"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
+    networks:
+      - healthcare-net
+
+  # 5. Treatment & Patient Care Agent - port 8012
+  treatment-agent:
+    build: ./services/treatment-agent
+    ports:
+      - "8012:8012"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
+    networks:
+      - healthcare-net
+
+  # -- Platform Services -----------------------------------------------------
+
+  # 6. Orchestrator Agent (Router / Master Agent) - port 8015
   orchestrator-agent:
     build: ./services/orchestrator-agent
     ports:
       - "8015:8015"
     environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
       - CARDIOLOGY_SERVICE_URL=http://cardiology-agent:8001/cardiology-agent
       - NEUROLOGY_SERVICE_URL=http://neurology-agent:8002/neurology-agent
       - CANCER_SERVICE_URL=http://cancer-agent:8003/cancer-agent
@@ -61,70 +115,15 @@ services:
       - CHROMA_PORT=8000
       - CHROMA_SIMILARITY_THRESHOLD=0.90
       - MAX_RETRY_COUNT=3
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
-      - kafka
-      - mongodb
-      - chromadb
+      mongodb:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
     networks:
       - healthcare-net
 
-  # 2. Cardiology Specialist Agent — port 8001
-  cardiology-agent:
-    build: ./services/cardiology-agent
-    ports:
-      - "8001:8001"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    networks:
-      - healthcare-net
-
-  # 3. Neurology Specialist Agent — port 8002
-  neurology-agent:
-    build: ./services/neurology-agent
-    ports:
-      - "8002:8002"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    networks:
-      - healthcare-net
-
-  # 4. Cancer Oncology Specialist Agent — port 8003
-  cancer-agent:
-    build: ./services/cancer-agent
-    ports:
-      - "8003:8003"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
-    depends_on:
-      - chromadb
-    networks:
-      - healthcare-net
-
-  # 5. Pathology Specialist Agent — port 8011
-  pathology-agent:
-    build: ./services/pathology-agent
-    ports:
-      - "8011:8011"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    networks:
-      - healthcare-net
-
-  # 6. Treatment & Patient Care Agent — port 8012
-  treatment-agent:
-    build: ./services/treatment-agent
-    ports:
-      - "8012:8012"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    networks:
-      - healthcare-net
-
-  # 7. XAI & Ethical Validator Service — port 8016
+  # 7. XAI & Ethical Validator Service - port 8016
   xai-validation-service:
     build: ./xai-validation-service
     ports:
@@ -134,7 +133,19 @@ services:
     networks:
       - healthcare-net
 
-  # 8. Patient UI — port 8501
+  # 8. Evaluation Service - port 8017
+  evaluation-service:
+    build: ./services/evaluation-service
+    ports:
+      - "8017:8017"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    networks:
+      - healthcare-net
+
+  # -- Frontend --------------------------------------------------------------
+
+  # 9. Patient UI - Streamlit web app - port 8021
   patient-ui:
     build: ./patient-ui
     ports:
@@ -146,15 +157,7 @@ services:
     networks:
       - healthcare-net
 
-  # 9. Evaluation Service — port 8017
-  evaluation-service:
-    build: ./services/evaluation-service
-    ports:
-      - "8017:8017"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    networks:
-      - healthcare-net
+# -- Networks & Volumes -------------------------------------------------------
 
 networks:
   healthcare-net:
@@ -162,4 +165,3 @@ networks:
 
 volumes:
   mongo_data:
-  chroma_data:
