@@ -93,7 +93,7 @@ def create_orchestrator_graph():
     """
     Build and compile the full LangGraph healthcare orchestration workflow.
 
-    Entry  : chroma_lookup (step 2.1 — ChromaDB semantic cache check)
+    Entry  : chroma_lookup (step 2.1 - ChromaDB semantic cache check)
     Nodes  : chroma_lookup, triage, specialist, secondary_check, conflict_check,
              xai_diagnosis_validator, treatment, xai_treatment_validator, finish
     Loops  : diagnosis retry (specialist ↔ xai_diagnosis_validator, max 3×)

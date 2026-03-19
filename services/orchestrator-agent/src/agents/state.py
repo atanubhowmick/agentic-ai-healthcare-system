@@ -13,7 +13,7 @@ class AgentState(TypedDict):
     patient_id: str
     symptoms: str
 
-    # Append-only audit trail — every node adds its own log entry
+    # Append-only audit trail - every node adds its own log entry
     messages: Annotated[List[str], operator.add]
 
     # -- ChromaDB cache --------------------------------------------------------

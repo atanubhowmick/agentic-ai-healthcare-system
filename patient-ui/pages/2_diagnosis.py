@@ -167,7 +167,7 @@ with center_col:
 # -- Call orchestrator and display results -------------------------------------
 with center_col:
     if st.session_state.is_loading and st.session_state.pending_symptoms:
-        with st.spinner("Analysing symptoms — consulting specialist agents, please wait..."):
+        with st.spinner("Analysing symptoms - consulting specialist agents, please wait..."):
             try:
                 resp = requests.post(
                     DIAGNOSE_ENDPOINT,
@@ -186,7 +186,7 @@ with center_col:
                 st.stop()
             except requests.exceptions.Timeout:
                 st.session_state.is_loading = False
-                st.error("The request timed out. The service may be overloaded — please try again.")
+                st.error("The request timed out. The service may be overloaded - please try again.")
                 st.stop()
             except Exception as exc:
                 st.session_state.is_loading = False
@@ -375,7 +375,7 @@ with center_col:
                 follow_up = t.get("followUpRequired", "")
                 timeframe = t.get("followUpTimeframe", "")
                 if follow_up:
-                    suffix = f" — {timeframe}" if timeframe and timeframe != "NONE" else ""
+                    suffix = f" - {timeframe}" if timeframe and timeframe != "NONE" else ""
                     st.markdown(f"**Follow-up Required:** {follow_up}{suffix}")
 
                 referral = t.get("referralRequired", "")
