@@ -1,59 +1,69 @@
+"""
+Treatment & Patient Care Agent - DeepAgent-based implementation.
+
+Architecture:
+  - Uses deepagents.create_deep_agent (built on LangGraph) as the executor.
+  - @tool decorator exposes the response schema to the agent.
+  - Session history and message construction are handled by treatment_service.py.
+
+Public interface (used by treatment_service.py):
+  treatment_executor  - the raw DeepAgent instance
+  BASE_SYSTEM         - system prompt (used by service to build messages)
+"""
+
+from langchain.tools import tool
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnableWithMessageHistory
-from langchain_community.chat_message_histories import ChatMessageHistory
+from deepagents import create_deep_agent
+
+from core.config import OPENAI_MODEL
 from log.logger import logger
 
-# 1. Define the Specialist Prompt
-prompt = ChatPromptTemplate.from_messages([
-    ("system", """You are a specialized Treatment & Patient Care AI Agent. Your goal is to synthesize
-               specialist diagnostic findings into a comprehensive, evidence-based treatment and care plan.
-               Always cite standard clinical protocols, specify medications with exact dosages and frequencies,
-               and clearly define urgency and follow-up requirements.
-               Provide the response strictly in the following JSON format:
-               {{
-                   "treatmentPlan": "Detailed treatment approach within 200 words",
-                   "medications": ["drug name - dosage - frequency"],
-                   "followUpRequired": "YES/NO",
-                   "followUpTimeframe": "e.g. 3 days / 1 week / 2 weeks / 1 month / 3 months / NONE",
-                   "lifestyleRecommendations": ["Diet change or restriction", "Exercise guidance", "Stress management"],
-                   "monitoringRequired": ["Parameter to track e.g. Blood pressure daily", "Troponin levels at 6 hours"],
-                   "referralRequired": "Specialist referral recommendation if needed, otherwise NONE",
-                   "urgency": "IMMEDIATE/SOON/ROUTINE"
-               }}
-               Urgency guide: IMMEDIATE = requires care within hours, SOON = within days, ROUTINE = weeks/scheduled."""),
-    MessagesPlaceholder(variable_name="chat_history"),
-    ("human", "{input}"),
-])
 
-# 2. Initialize LLM and chain
-logger.debug("Initializing Treatment LLM and chain")
-llm = ChatOpenAI(model="gpt-5.2", temperature=0)
-treatment_chain = prompt | llm
-logger.debug("Treatment chain initialized successfully")
+# -- JSON response schema -------------------------------------------------------
 
-# 3. Session store for chat history
-_session_store: dict = {}
+_JSON_SCHEMA = """
+{
+    "treatmentPlan": "Detailed treatment approach within 200 words",
+    "medications": ["drug name - dosage - frequency"],
+    "followUpRequired": "YES/NO",
+    "followUpTimeframe": "e.g. 3 days / 1 week / 2 weeks / 1 month / 3 months / NONE",
+    "lifestyleRecommendations": ["Diet change or restriction", "Exercise guidance", "Stress management"],
+    "monitoringRequired": ["Parameter to track e.g. Blood pressure daily", "Troponin levels at 6 hours"],
+    "referralRequired": "Specialist referral recommendation if needed, otherwise NONE",
+    "urgency": "IMMEDIATE/SOON/ROUTINE"
+}"""
 
-
-def _get_session_history(session_id: str) -> ChatMessageHistory:
-    if session_id not in _session_store:
-        logger.debug("Creating new chat history for session: %s", session_id)
-        _session_store[session_id] = ChatMessageHistory()
-    else:
-        logger.debug(
-            "Reusing existing chat history for session: %s | messages in history: %d",
-            session_id, len(_session_store[session_id].messages),
-        )
-    return _session_store[session_id]
-
-
-# 4. Chain with message history
-logger.debug("Wrapping chain with RunnableWithMessageHistory")
-treatment_executor = RunnableWithMessageHistory(
-    treatment_chain,
-    _get_session_history,
-    input_messages_key="input",
-    history_messages_key="chat_history",
+BASE_SYSTEM = (
+    "You are a specialized Treatment & Patient Care AI Agent. Your goal is to synthesize "
+    "specialist diagnostic findings into a comprehensive, evidence-based treatment and care plan. "
+    "Always cite standard clinical protocols, specify medications with exact dosages and frequencies, "
+    "and clearly define urgency and follow-up requirements. "
+    "Urgency guide: IMMEDIATE = requires care within hours, SOON = within days, ROUTINE = weeks/scheduled. "
+    "Provide the response strictly in the following JSON format:" + _JSON_SCHEMA
 )
-logger.debug("Treatment executor ready")
+
+
+# -- Tools ----------------------------------------------------------------------
+
+@tool
+def get_treatment_response_schema() -> str:
+    """Return the required JSON response schema for treatment plan output.
+    Call this tool whenever you need a reminder of the exact JSON format expected."""
+    return _JSON_SCHEMA
+
+
+# -- LLM ------------------------------------------------------------------------
+
+logger.debug("Initializing Treatment LLM | model: %s", OPENAI_MODEL)
+_llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
+
+
+# -- DeepAgent ------------------------------------------------------------------
+
+logger.debug("Building Treatment DeepAgent")
+treatment_executor = create_deep_agent(
+    model=_llm,
+    tools=[get_treatment_response_schema],
+    system_prompt=BASE_SYSTEM,
+)
+logger.debug("Treatment DeepAgent ready")

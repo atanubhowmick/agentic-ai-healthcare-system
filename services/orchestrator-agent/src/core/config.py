@@ -32,6 +32,9 @@ CHROMA_HOST = os.getenv("CHROMA_HOST", "127.0.0.1")
 CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8020"))
 CHROMA_SIMILARITY_THRESHOLD = float(os.getenv("CHROMA_SIMILARITY_THRESHOLD", "0.90"))
 
+# -- Orchestrator identity ----------------------------------------------------
+ORCHESTRATOR_AGENT_ID = "ORCH-AGENT-1000"
+
 # -- Orchestrator settings ----------------------------------------------------
 MAX_RETRY_COUNT = int(os.getenv("MAX_RETRY_COUNT", "3"))
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "60.0"))
