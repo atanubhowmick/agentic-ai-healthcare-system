@@ -3,13 +3,15 @@
 
 Decision cascade (each tier escalates only when confidence is insufficient):
 
-  Tier 1 — Rule Router              : keyword dominance >= RULE_DOMINANCE_RATIO        (~0ms,   free)
-  Tier 2 — BioBERT Embedding        : cosine similarity >= BIOBERT_CONFIDENCE_THRESHOLD (~80ms,  free)
+  Tier 1 — Rule Router              : keyword dominance >= RULE_DOMINANCE_RATIO           (~0ms,   free)
+  Tier 2 — BioBERT Zero-Shot NLI    : top label score   >= BIOBERT_CONFIDENCE_THRESHOLD   (~150ms, free)
   Tier 3 — ClinicalBERT Classifier  : softmax probability >= CLINICAL_CONFIDENCE_THRESHOLD (~120ms, free)
-  Tier 4 — LLM Fallback             : gpt-5.2 (always returns)                         (~600ms, paid)
+  Tier 4 — LLM Fallback             : gpt-5.2 (always returns)                            (~600ms, paid)
 
 Models:
-  Tier 2: pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb  (SentenceTransformer, cosine similarity)
+  Tier 2: pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb
+          Used as zero-shot-classification pipeline (NLI entailment scoring).
+          No exemplar sentences needed — the model scores each candidate label directly.
   Tier 3: Fine-tuned emilyalsentzer/Bio_ClinicalBERT                (AutoModelForSequenceClassification)
           Loaded from CLINICALBERT_MODEL_DIR (produced by train_clinicalbert.py).
           If the model directory does not exist, Tier 3 is skipped gracefully.
@@ -21,10 +23,8 @@ secondary_check_needed is determined by a pure keyword rule at every tier — no
 import json
 import asyncio
 import os
-import numpy as np
 import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from sentence_transformers import SentenceTransformer
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -42,10 +42,10 @@ from log.logger import logger
 # Model identifiers
 # ---------------------------------------------------------------------------
 _BIOBERT_MODEL_NAME = "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
+_BIOBERT_HYPOTHESIS_TEMPLATE = "This patient requires {} specialist care."
 
-# Tier 2 — BioBERT SentenceTransformer singletons
-_biobert_model:     SentenceTransformer | None = None
-_biobert_centroids: np.ndarray | None = None   # shape (4, dim)
+# Tier 2 — BioBERT zero-shot NLI pipeline singleton
+_biobert_zsc = None   # transformers zero-shot-classification pipeline
 
 # Tier 3 — Fine-tuned ClinicalBERT classifier singletons
 _clinicalbert_tokenizer: AutoTokenizer | None = None
@@ -92,7 +92,8 @@ _triage_chain = _TRIAGE_PROMPT | _llm
 # ---------------------------------------------------------------------------
 _KEYWORD_MAP: dict[str, list[str]] = {
     "cardiology": [
-        "chest pain", "chest tightness", "palpitation", "palpitations",
+        "chest pain", "tightness", "palpitation", "palpitations",
+        "difficulties in breathing", "difficulty in breathing",
         "arrhythmia", "arrhythmias", "hypertension", "heart attack",
         "myocardial", "infarction", "angina", "cardiac", "cardio",
         "shortness of breath", "dyspnea", "edema", "bradycardia",
@@ -140,40 +141,6 @@ _LAB_INDICATOR_KEYWORDS: list[str] = [
 
 _SECONDARY_CHECK_SPECIALISTS = {"cardiology", "neurology", "cancer"}
 
-# ---------------------------------------------------------------------------
-# Specialist exemplar sentences for BioBERT centroid computation (Tier 2 only)
-# ---------------------------------------------------------------------------
-_SPECIALIST_EXEMPLARS: dict[str, list[str]] = {
-    "cardiology": [
-        "chest pain radiating to left arm with shortness of breath",
-        "heart palpitations and irregular heartbeat, atrial fibrillation",
-        "severe hypertension with dizziness and blurred vision",
-        "acute myocardial infarction with coronary artery disease",
-        "lower limb edema and congestive heart failure",
-    ],
-    "neurology": [
-        "severe headache with photophobia and neck stiffness",
-        "recurrent seizures and loss of consciousness",
-        "progressive memory loss and cognitive decline",
-        "sudden onset one-sided weakness, possible stroke",
-        "numbness and tingling in extremities, multiple sclerosis",
-    ],
-    "cancer": [
-        "unexplained weight loss with night sweats and enlarged lymph nodes",
-        "persistent breast lump with abnormal bleeding",
-        "elevated tumour markers CA-125 with suspicious mass on imaging",
-        "chronic fatigue with suspected malignancy and positive biopsy",
-        "metastatic disease with widespread lymphoma",
-    ],
-    "pathology": [
-        "abnormal CBC with elevated white blood cell count",
-        "elevated blood sugar and HbA1c, diabetes management",
-        "bacterial infection confirmed by culture",
-        "abnormal liver function tests with elevated ALT and AST",
-        "anaemia with low haemoglobin and iron deficiency",
-    ],
-}
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -196,44 +163,29 @@ def _secondary_check(specialist: str, symptoms_lower: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Tier 2 — BioBERT SentenceTransformer: loading & centroid computation
+# Tier 2 — BioBERT Zero-Shot NLI: loading
 # ---------------------------------------------------------------------------
 
-def _load_sentence_transformer(model_name: str) -> SentenceTransformer:
-    logger.info("[TRIAGE_ROUTER] Loading SentenceTransformer: %s", model_name)
-    model = SentenceTransformer(model_name)
-    logger.info("[TRIAGE_ROUTER] Loaded: %s", model_name)
-    return model
+def _load_biobert_zsc():
+    """Load the BioBERT zero-shot-classification pipeline (blocking)."""
+    global _biobert_zsc
+    logger.info("[TRIAGE_ROUTER] Loading BioBERT zero-shot-classification pipeline: %s", _BIOBERT_MODEL_NAME)
+    _biobert_zsc = pipeline(
+        "zero-shot-classification",
+        model=_BIOBERT_MODEL_NAME,
+        device=-1,   # CPU; set device=0 for GPU
+    )
+    logger.info("[TRIAGE_ROUTER] BioBERT zero-shot pipeline ready.")
 
 
-def _compute_biobert_centroids(model: SentenceTransformer) -> np.ndarray:
-    """Compute L2-normalised centroid matrix of shape (4, dim).
-    normalize_embeddings=True makes each exemplar vector unit-length before averaging,
-    so the centroid direction is stable. The centroid itself is then re-normalised."""
-    rows = []
-    for specialist in SPECIALISTS:
-        exemplars = _SPECIALIST_EXEMPLARS[specialist]
-        vecs = model.encode(exemplars, convert_to_numpy=True, normalize_embeddings=True)  # (N, dim)
-        centroid = np.mean(vecs, axis=0).astype(np.float32)
-        centroid /= (np.linalg.norm(centroid) + 1e-9)
-        rows.append(centroid)
-    matrix = np.stack(rows, axis=0)
-    logger.info("[TRIAGE_ROUTER] BioBERT centroid matrix ready | shape: %s", matrix.shape)
-    return matrix
-
-
-async def _get_biobert_centroids() -> np.ndarray:
-    global _biobert_model, _biobert_centroids
-    if _biobert_centroids is not None:
-        return _biobert_centroids
+async def _get_biobert_zsc():
+    """Lazy-load the BioBERT pipeline; returns the singleton."""
+    global _biobert_zsc
+    if _biobert_zsc is not None:
+        return _biobert_zsc
     loop = asyncio.get_event_loop()
-    _biobert_model = await loop.run_in_executor(
-        None, _load_sentence_transformer, _BIOBERT_MODEL_NAME
-    )
-    _biobert_centroids = await loop.run_in_executor(
-        None, _compute_biobert_centroids, _biobert_model
-    )
-    return _biobert_centroids
+    await loop.run_in_executor(None, _load_biobert_zsc)
+    return _biobert_zsc
 
 
 # ---------------------------------------------------------------------------
@@ -248,17 +200,12 @@ def _load_clinicalbert_classifier(model_dir: str) -> bool:
     """
     global _clinicalbert_tokenizer, _clinicalbert_clf, _clinicalbert_available
     if not os.path.isdir(model_dir):
-        logger.info(
-            "[TRIAGE_ROUTER] ClinicalBERT model not found at '%s' — "
-            "starting auto-training (this runs once and takes a few minutes)...",
+        logger.warning(
+            "[TRIAGE_ROUTER] ClinicalBERT model not found at '%s'. "
+            "Run train_triage_classifier.py to generate it. Tier 3 will be skipped.",
             model_dir,
         )
-        try:
-            from agents.clinicalbert_trainer import train_and_save
-            train_and_save(model_dir)
-        except Exception as e:
-            logger.error("[TRIAGE_ROUTER] ClinicalBERT auto-training failed: %s. Tier 3 will be skipped.", str(e))
-            return False
+        return False
     logger.info("[TRIAGE_ROUTER] Loading fine-tuned ClinicalBERT from: %s", model_dir)
     _clinicalbert_tokenizer = AutoTokenizer.from_pretrained(model_dir)
     _clinicalbert_clf = AutoModelForSequenceClassification.from_pretrained(model_dir)
@@ -287,7 +234,7 @@ async def _ensure_clinicalbert_loaded() -> bool:
 async def warm_up_models() -> None:
     """Pre-load models before the first request.
     Call from FastAPI lifespan to eliminate cold-start latency."""
-    await _get_biobert_centroids()
+    await _get_biobert_zsc()
     await _ensure_clinicalbert_loaded()
     logger.info("[TRIAGE_ROUTER] All models warm and ready.")
 
@@ -311,6 +258,9 @@ def _rule_route(symptoms_lower: str) -> tuple[str | None, float]:
         for s, kws in _KEYWORD_MAP.items()
     }
     total = sum(counts.values())
+    logger.info("[TRIAGE_ROUTER] Tier 1 (Rule) keyword hits | total=%d (min=%d) | %s",
+                total, RULE_MIN_KEYWORD_HITS,
+                ", ".join(f"{s}={c}" for s, c in counts.items()))
     if total < RULE_MIN_KEYWORD_HITS:
         return None, 0.0
     winner = max(counts, key=counts.__getitem__)
@@ -321,19 +271,24 @@ def _rule_route(symptoms_lower: str) -> tuple[str | None, float]:
 
 
 # ---------------------------------------------------------------------------
-# Tier 2 — BioBERT Embedding Router
+# Tier 2 — BioBERT Zero-Shot NLI Router
 # ---------------------------------------------------------------------------
 
 async def _biobert_route(symptoms: str) -> tuple[str, float]:
-    """Encode symptoms with BioBERT; return (specialist, cosine_similarity)."""
-    centroids = await _get_biobert_centroids()
+    """Zero-shot NLI: score each specialist label via BioBERT entailment.
+    Returns (top_specialist, entailment_score)."""
+    zsc = await _get_biobert_zsc()
     loop = asyncio.get_event_loop()
-    encode_fn = lambda s: _biobert_model.encode(s, convert_to_numpy=True, normalize_embeddings=True)
-    vec = await loop.run_in_executor(None, encode_fn, symptoms)
-    vec = np.array(vec, dtype=np.float32)   # unit-length; dot product == cosine similarity
-    sims = centroids @ vec
-    idx = int(np.argmax(sims))
-    return SPECIALISTS[idx], float(sims[idx])
+    run_fn = lambda: zsc(
+        symptoms,
+        candidate_labels=SPECIALISTS,
+        hypothesis_template=_BIOBERT_HYPOTHESIS_TEMPLATE,
+        multi_label=False,
+    )
+    result = await loop.run_in_executor(None, run_fn)
+    specialist = result["labels"][0]
+    score = float(result["scores"][0])
+    return specialist, score
 
 
 # ---------------------------------------------------------------------------
@@ -413,9 +368,9 @@ async def route_symptoms(symptoms: str) -> tuple[str, bool, str]:
     specialist, score = await _biobert_route(symptoms)
     if score >= BIOBERT_CONFIDENCE_THRESHOLD:
         secondary = _secondary_check(specialist, low)
-        logger.info("[TRIAGE_ROUTER] Tier 2 (BioBERT) → %s | cosine=%.3f", specialist, score)
-        return specialist, secondary, f"[BioBERT] cosine={score:.3f}"
-    logger.info("[TRIAGE_ROUTER] Tier 2 (BioBERT) low confidence → %s | cosine=%.3f — escalating", specialist, score)
+        logger.info("[TRIAGE_ROUTER] Tier 2 (BioBERT NLI) → %s | score=%.3f", specialist, score)
+        return specialist, secondary, f"[BioBERT NLI] score={score:.3f}"
+    logger.info("[TRIAGE_ROUTER] Tier 2 (BioBERT NLI) low confidence → %s | score=%.3f — escalating", specialist, score)
 
     # Tier 3: Fine-tuned ClinicalBERT classifier (skipped if model not trained yet)
     if await _ensure_clinicalbert_loaded():

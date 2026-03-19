@@ -130,7 +130,7 @@ _, center_col, _ = st.columns([1, 3, 1])
 with center_col:
     st.markdown("#### Describe Your Symptoms")
     st.markdown(
-        "Provide as much detail as possible about your symptoms, their duration, and severity.",
+        "Describe your symptoms in detail, including duration and severity. Please avoid sharing personal information.",
         help=f"Maximum {MAX_SYMPTOMS_CHARS} characters",
     )
 

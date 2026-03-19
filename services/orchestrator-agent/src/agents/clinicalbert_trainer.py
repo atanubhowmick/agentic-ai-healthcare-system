@@ -1,7 +1,8 @@
 """
-ClinicalBERT fine-tuning logic — shared between:
-  - triage_router.py  : auto-trains on first startup if model dir is absent
-  - train_clinicalbert.py : standalone CLI script for manual re-training
+ClinicalBERT fine-tuning logic.
+
+Training data is injected via the `training_data` parameter.
+Use the standalone train_triage_classifier.py at the project root to train.
 """
 
 import numpy as np
@@ -17,10 +18,17 @@ from transformers import (
     TrainingArguments,
 )
 
-from data.triage_training_data import ID2LABEL, LABEL2ID, TRIAGE_TRAINING_DATA
 from log.logger import logger
 
 _BASE_MODEL  = "emilyalsentzer/Bio_ClinicalBERT"
+
+LABEL2ID: dict[str, int] = {
+    "cardiology": 0,
+    "neurology":  1,
+    "cancer":     2,
+    "pathology":  3,
+}
+ID2LABEL: dict[int, str] = {v: k for k, v in LABEL2ID.items()}
 _MAX_LENGTH  = 128
 _RANDOM_SEED = 42
 
@@ -58,23 +66,24 @@ def _compute_metrics(eval_pred) -> dict:
 
 def train_and_save(
     output_dir: str,
+    training_data: list[tuple[str, str]],
     epochs: int = 10,
     batch_size: int = 8,
     lr: float = 2e-5,
     val_split: float = 0.15,
 ) -> None:
-    """
-    Fine-tune Bio_ClinicalBERT on TRIAGE_TRAINING_DATA and save to output_dir.
-    Called automatically by triage_router on first startup, or manually via
-    train_clinicalbert.py.
-    """
+    """Fine-tune Bio_ClinicalBERT on training_data and save to output_dir."""
+    if not training_data:
+        logger.error("[CLINICALBERT_TRAINER] No training data provided. Aborting.")
+        return
+
     logger.info("[CLINICALBERT_TRAINER] Starting fine-tuning | base=%s | samples=%d | output=%s",
-                _BASE_MODEL, len(TRIAGE_TRAINING_DATA), output_dir)
+                _BASE_MODEL, len(training_data), output_dir)
 
     train_samples, val_samples = train_test_split(
-        TRIAGE_TRAINING_DATA,
+        training_data,
         test_size=val_split,
-        stratify=[label for _, label in TRIAGE_TRAINING_DATA],
+        stratify=[label for _, label in training_data],
         random_state=_RANDOM_SEED,
     )
     logger.info("[CLINICALBERT_TRAINER] Train: %d | Val: %d", len(train_samples), len(val_samples))
