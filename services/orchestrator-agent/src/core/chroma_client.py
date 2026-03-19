@@ -71,8 +71,8 @@ async def lookup_treatment_recommendation(symptoms: str) -> Tuple[bool, Optional
     Search treatment_outcomes for a semantically similar prior case.
 
     Returns:
-        (True, cached_result)  — if similarity >= SIMILARITY_THRESHOLD
-        (False, None)          — otherwise
+        (True, cached_result)  - if similarity >= SIMILARITY_THRESHOLD
+        (False, None)          - otherwise
     """
     _, treatment_col = _get_collections()
     if treatment_col is None:

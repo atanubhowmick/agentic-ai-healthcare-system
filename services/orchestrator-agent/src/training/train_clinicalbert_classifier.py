@@ -1,7 +1,7 @@
 """
 Standalone script to fine-tune the ClinicalBERT triage classifier.
 
-Run this OUTSIDE the application — no running service required.
+Run this OUTSIDE the application - no running service required.
 Both CSV files are external (not committed to git) and must be provided via
 --triage-csv and/or --disease-csv. At least one must be supplied.
 
@@ -10,7 +10,7 @@ it via the CLINICALBERT_MODEL_DIR env var (default: ./clinicalbert_router).
 
 Usage examples
 --------------
-# Both CSVs (recommended — 6000+ balanced examples)
+# Both CSVs (recommended - 6000+ balanced examples)
 python services/orchestrator-agent/src/training/train_clinicalbert_classifier.py \\
     --triage-csv  /data/triage_training_data.csv \\
     --disease-csv "/data/Disease and symptoms dataset.csv"
@@ -195,7 +195,7 @@ def load_disease_csv(
     for label, samples in buckets.items():
         rng.shuffle(samples)
         result.extend(samples[:max_per_label])
-        log.info("  Disease CSV — %s: %d samples (capped at %d)", label, min(len(samples), max_per_label), max_per_label)
+        log.info("  Disease CSV - %s: %d samples (capped at %d)", label, min(len(samples), max_per_label), max_per_label)
 
     rng.shuffle(result)
     log.info("Disease CSV loaded: %d examples total", len(result))
@@ -278,7 +278,7 @@ def train_and_save(
         stratify=[lbl for _, lbl in all_data],
         random_state=_RANDOM_SEED,
     )
-    log.info("Split — Train: %d | Val: %d", len(train_samples), len(val_samples))
+    log.info("Split - Train: %d | Val: %d", len(train_samples), len(val_samples))
 
     log.info("Loading base model: %s", _BASE_MODEL)
     tokenizer = AutoTokenizer.from_pretrained(_BASE_MODEL)
@@ -354,12 +354,12 @@ def main() -> None:
     parser.add_argument(
         "--triage-csv",
         default="",
-        help="Path to triage_training_data.csv (synthetic examples). External — not in git.",
+        help="Path to triage_training_data.csv (synthetic examples). External - not in git.",
     )
     parser.add_argument(
         "--disease-csv",
         default="",
-        help="Path to 'Disease and symptoms dataset.csv'. External — not in git.",
+        help="Path to 'Disease and symptoms dataset.csv'. External - not in git.",
     )
     parser.add_argument(
         "--output-dir",

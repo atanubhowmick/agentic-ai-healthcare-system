@@ -1,5 +1,5 @@
 """
-Rule-based medical safety checks — fast, deterministic, no LLM required.
+Rule-based medical safety checks - fast, deterministic, no LLM required.
 These act as a pre-filter before the LLM validation step.
 """
 
@@ -38,11 +38,11 @@ def check_emergency_consistency(symptoms: str, severity: str, emergency_care: st
         )
 
     if severity_upper == "CRITICAL" and emergency_upper != "YES":
-        return False, "Severity is CRITICAL but emergency care is not flagged — inconsistent."
+        return False, "Severity is CRITICAL but emergency care is not flagged - inconsistent."
 
     if has_emergency and severity_upper == "LOW":
         return False, (
-            "Emergency-level symptoms are present but severity is marked LOW — "
+            "Emergency-level symptoms are present but severity is marked LOW - "
             "possible under-triage."
         )
 

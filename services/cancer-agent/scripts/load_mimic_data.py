@@ -107,7 +107,7 @@ def _infer_severity(discharge_location) -> str:
 
 def _build_document_text(triage_complaint: str, chief_complaint: str, hpi: str) -> str:
     """
-    Build the embedding document — text used for similarity search against user queries.
+    Build the embedding document - text used for similarity search against user queries.
 
     Only symptom/presentation text is embedded. The cancer diagnosis is stored
     in metadata only so it does not dilute symptom-based similarity scores.
@@ -196,7 +196,7 @@ def _process_row(row: dict) -> dict | None:
     treatment_summary = _extract_assessment(note)
     document_text     = _build_document_text(triage_complaint, chief_complaint, hpi)
 
-    # Last resort fallback: no symptom text available — use ICD diagnosis title
+    # Last resort fallback: no symptom text available - use ICD diagnosis title
     if not document_text.strip():
         if cancer_type and cancer_type != "Unknown neoplasm":
             document_text = cancer_type

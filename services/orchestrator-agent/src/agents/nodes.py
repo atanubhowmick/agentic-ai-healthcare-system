@@ -6,7 +6,7 @@ Node execution order (happy path):
   → xai_diagnosis_validator → treatment → xai_treatment_validator → finish
 
 ChromaDB integration:
-  - chroma_lookup_node  : first node — returns cached treatment if similarity >= threshold
+  - chroma_lookup_node  : first node - returns cached treatment if similarity >= threshold
   - xai_diagnosis_validator_node : saves validated diagnosis to ChromaDB (non-blocking)
   - xai_treatment_validator_node : saves validated treatment to ChromaDB (non-blocking)
 
@@ -115,7 +115,7 @@ async def chroma_lookup_node(state: AgentState) -> dict:
             "status": "COMPLETED_FROM_CACHE",
             "specialist_agent": specialist,
             "diagnosis": {
-                "summary": cached.get("diagnosis_summary", "Cached result — see treatment"),
+                "summary": cached.get("diagnosis_summary", "Cached result - see treatment"),
                 "severity": cached.get("severity", "N/A"),
                 "emergency_care_needed": "N/A",
                 "hospitalization_needed": "N/A",
@@ -135,7 +135,7 @@ async def chroma_lookup_node(state: AgentState) -> dict:
             "human_review_reason": None,
             "audit_trail": [
                 f"[CHROMA_LOOKUP] Cache hit (similarity={score}) "
-                "— returning cached treatment recommendation"
+                "- returning cached treatment recommendation"
             ],
         }
         return {
@@ -143,15 +143,15 @@ async def chroma_lookup_node(state: AgentState) -> dict:
             "chroma_cached_result": cached,
             "final_response": final_response,
             "messages": [
-                f"[CHROMA_LOOKUP] Cache hit | similarity: {score} — skipping full diagnosis pipeline"
+                f"[CHROMA_LOOKUP] Cache hit | similarity: {score} - skipping full diagnosis pipeline"
             ],
         }
 
-    logger.info("[CHROMA_LOOKUP] No cache hit | patient: %s — proceeding with full pipeline", patient_id)
+    logger.info("[CHROMA_LOOKUP] No cache hit | patient: %s - proceeding with full pipeline", patient_id)
     return {
         "chroma_cache_hit": False,
         "chroma_cached_result": None,
-        "messages": ["[CHROMA_LOOKUP] No cache hit — proceeding with full diagnosis flow"],
+        "messages": ["[CHROMA_LOOKUP] No cache hit - proceeding with full diagnosis flow"],
     }
 
 
@@ -210,7 +210,7 @@ async def specialist_node(state: AgentState) -> dict:
         else:
             return {
                 "requires_human_review": True,
-                "human_review_reason": f"Unknown specialist '{specialist}' — cannot route.",
+                "human_review_reason": f"Unknown specialist '{specialist}' - cannot route.",
                 "messages": [f"[SPECIALIST] Cannot route to unknown specialist: {specialist}"],
             }
 
@@ -275,12 +275,12 @@ async def secondary_check_node(state: AgentState) -> dict:
                 "messages": [f"[PATHOLOGY_SECONDARY] Severity: {severity}"],
             }
         else:
-            logger.warning("[SECONDARY_CHECK] Pathology returned empty — proceeding without secondary data")
+            logger.warning("[SECONDARY_CHECK] Pathology returned empty - proceeding without secondary data")
             return {
                 "secondary_diagnosis": None,
                 "secondary_agent": None,
                 "secondary_check_done": True,
-                "messages": ["[PATHOLOGY_SECONDARY] Empty response — proceeding without secondary data"],
+                "messages": ["[PATHOLOGY_SECONDARY] Empty response - proceeding without secondary data"],
             }
 
     except Exception as e:
@@ -303,8 +303,8 @@ async def conflict_check_node(state: AgentState) -> dict:
     if not secondary:
         return {
             "conflict_detected": False,
-            "conflict_reason": "No secondary diagnosis — conflict check skipped.",
-            "messages": ["[CONFLICT_CHECK] No secondary data — skipped."],
+            "conflict_reason": "No secondary diagnosis - conflict check skipped.",
+            "messages": ["[CONFLICT_CHECK] No secondary data - skipped."],
         }
 
     primary_summary = _diagnosis_summary(primary or {})
@@ -351,17 +351,17 @@ async def conflict_check_node(state: AgentState) -> dict:
         }
 
     except Exception as e:
-        logger.error("[CONFLICT_CHECK] Error: %s — proceeding without conflict flag", str(e))
+        logger.error("[CONFLICT_CHECK] Error: %s - proceeding without conflict flag", str(e))
         return {
             "conflict_detected": False,
             "conflict_reason": f"Conflict check error: {str(e)}",
-            "messages": [f"[CONFLICT_CHECK] Error: {str(e)} — proceeding"],
+            "messages": [f"[CONFLICT_CHECK] Error: {str(e)} - proceeding"],
         }
 
 
 async def xai_diagnosis_validator_node(state: AgentState) -> dict:
     """
-    Validate specialist diagnosis via XAI service — retry loop #1 (step 2.3 / 2.4).
+    Validate specialist diagnosis via XAI service - retry loop #1 (step 2.3 / 2.4).
     On successful validation, saves diagnosis outcome to ChromaDB (step 2.4.1).
     On max retries, triggers human review (step 2.4.3).
     """
@@ -394,13 +394,13 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
                 "diagnosis_retry_count": new_retry,
                 "diagnosis_xai_result": payload,
                 "messages": [
-                    f"[XAI_DIAGNOSIS] Validated on attempt {attempt} — diagnosis saved to ChromaDB"
+                    f"[XAI_DIAGNOSIS] Validated on attempt {attempt} - diagnosis saved to ChromaDB"
                 ],
             }
 
         # Validation failed
         if new_retry >= MAX_RETRY_COUNT:
-            # Step 2.4.3: Max retries — human intervention needed
+            # Step 2.4.3: Max retries - human intervention needed
             logger.warning("[XAI_DIAGNOSIS] Max retries reached | patient: %s", patient_id)
             return {
                 "diagnosis_validated": False,
@@ -408,24 +408,24 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
                 "diagnosis_xai_result": payload,
                 "requires_human_review": True,
                 "human_review_reason": (
-                    f"Diagnosis failed XAI validation after {new_retry} attempts — "
+                    f"Diagnosis failed XAI validation after {new_retry} attempts - "
                     "human intervention needed. "
                     f"Summary: {payload.get('result', {}).get('validation_summary', 'N/A')}"
                 ),
                 "messages": [
-                    f"[XAI_DIAGNOSIS] Validation failed — max retries ({MAX_RETRY_COUNT}) reached. "
+                    f"[XAI_DIAGNOSIS] Validation failed - max retries ({MAX_RETRY_COUNT}) reached. "
                     "Diagnosis failed, human intervention needed."
                 ],
             }
 
         # Step 2.4.2: Retry specialist
-        logger.info("[XAI_DIAGNOSIS] Validation failed | attempt: %d — retrying specialist", attempt)
+        logger.info("[XAI_DIAGNOSIS] Validation failed | attempt: %d - retrying specialist", attempt)
         return {
             "diagnosis_validated": False,
             "diagnosis_retry_count": new_retry,
             "diagnosis_xai_result": payload,
             "messages": [
-                f"[XAI_DIAGNOSIS] Validation failed (attempt {attempt}) — retrying specialist."
+                f"[XAI_DIAGNOSIS] Validation failed (attempt {attempt}) - retrying specialist."
             ],
         }
 
@@ -439,18 +439,18 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
                 "diagnosis_xai_result": None,
                 "requires_human_review": True,
                 "human_review_reason": (
-                    f"XAI diagnosis service error after {new_retry} attempts: {str(e)} — "
+                    f"XAI diagnosis service error after {new_retry} attempts: {str(e)} - "
                     "human intervention needed."
                 ),
                 "messages": [
-                    "[XAI_DIAGNOSIS] Service error — max retries reached. Human intervention needed."
+                    "[XAI_DIAGNOSIS] Service error - max retries reached. Human intervention needed."
                 ],
             }
         return {
             "diagnosis_validated": False,
             "diagnosis_retry_count": new_retry,
             "diagnosis_xai_result": None,
-            "messages": [f"[XAI_DIAGNOSIS] Service error: {str(e)} — retrying."],
+            "messages": [f"[XAI_DIAGNOSIS] Service error: {str(e)} - retrying."],
         }
 
 
@@ -500,7 +500,7 @@ async def treatment_node(state: AgentState) -> dict:
 
 async def xai_treatment_validator_node(state: AgentState) -> dict:
     """
-    Validate treatment recommendation via XAI service — retry loop #2 (step 2.5 / 2.6).
+    Validate treatment recommendation via XAI service - retry loop #2 (step 2.5 / 2.6).
     On successful validation, saves treatment outcome to ChromaDB (step 2.6.1).
     On max retries, triggers human review (step 2.6.2).
     """
@@ -546,12 +546,12 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
                 "treatment_retry_count": new_retry,
                 "treatment_xai_result": payload,
                 "messages": [
-                    f"[XAI_TREATMENT] Validated on attempt {attempt} — treatment saved to ChromaDB"
+                    f"[XAI_TREATMENT] Validated on attempt {attempt} - treatment saved to ChromaDB"
                 ],
             }
 
         if new_retry >= MAX_RETRY_COUNT:
-            # Step 2.6.2: Max retries — human intervention needed
+            # Step 2.6.2: Max retries - human intervention needed
             logger.warning("[XAI_TREATMENT] Max retries reached | patient: %s", patient_id)
             return {
                 "treatment_validated": False,
@@ -559,24 +559,24 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
                 "treatment_xai_result": payload,
                 "requires_human_review": True,
                 "human_review_reason": (
-                    f"Treatment recommendation failed XAI validation after {new_retry} attempts — "
+                    f"Treatment recommendation failed XAI validation after {new_retry} attempts - "
                     "human intervention needed. "
                     f"Summary: {payload.get('result', {}).get('validation_summary', 'N/A')}"
                 ),
                 "messages": [
-                    f"[XAI_TREATMENT] Validation failed — max retries ({MAX_RETRY_COUNT}) reached. "
+                    f"[XAI_TREATMENT] Validation failed - max retries ({MAX_RETRY_COUNT}) reached. "
                     "Treatment recommendation failed, human intervention needed."
                 ],
             }
 
         # Step 2.6.2: Retry treatment agent
-        logger.info("[XAI_TREATMENT] Validation failed | attempt: %d — retrying treatment", attempt)
+        logger.info("[XAI_TREATMENT] Validation failed | attempt: %d - retrying treatment", attempt)
         return {
             "treatment_validated": False,
             "treatment_retry_count": new_retry,
             "treatment_xai_result": payload,
             "messages": [
-                f"[XAI_TREATMENT] Validation failed (attempt {attempt}) — retrying treatment."
+                f"[XAI_TREATMENT] Validation failed (attempt {attempt}) - retrying treatment."
             ],
         }
 
@@ -590,25 +590,25 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
                 "treatment_xai_result": None,
                 "requires_human_review": True,
                 "human_review_reason": (
-                    f"XAI treatment service error after {new_retry} attempts: {str(e)} — "
+                    f"XAI treatment service error after {new_retry} attempts: {str(e)} - "
                     "human intervention needed."
                 ),
                 "messages": [
-                    "[XAI_TREATMENT] Service error — max retries reached. Human intervention needed."
+                    "[XAI_TREATMENT] Service error - max retries reached. Human intervention needed."
                 ],
             }
         return {
             "treatment_validated": False,
             "treatment_retry_count": new_retry,
             "treatment_xai_result": None,
-            "messages": [f"[XAI_TREATMENT] Service error: {str(e)} — retrying."],
+            "messages": [f"[XAI_TREATMENT] Service error: {str(e)} - retrying."],
         }
 
 
 async def finish_node(state: AgentState) -> dict:
     """
     Assemble the final response and persist to MongoDB.
-    Terminal node — reached on success, cache hit, or human-review.
+    Terminal node - reached on success, cache hit, or human-review.
     When chroma_cache_hit=True the final_response is already pre-filled.
     """
     patient_id = state.get("patient_id", "UNKNOWN")

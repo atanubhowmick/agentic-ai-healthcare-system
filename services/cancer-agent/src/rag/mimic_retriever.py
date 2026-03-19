@@ -8,13 +8,13 @@ These cases are injected into the LLM prompt as RAG context.
 Collection schema (set by load_mimic_data.py):
   document  : symptom / presentation text extracted from discharge notes
   metadata  : {
-      cancer_type      : str   — ICD-10 long title (e.g. "Malignant neoplasm of upper lobe, bronchus or lung")
-      icd_codes        : str   — comma-separated ICD-10 codes (e.g. "C34.12, C78.01")
-      chief_complaint  : str   — Chief Complaint section from discharge note
-      treatment_summary: str   — Assessment & Plan section from discharge note
-      lab_findings     : str   — key lab findings (if available)
-      severity         : str   — derived from discharge disposition (CRITICAL / HIGH / LOW)
-      source           : str   — always "MIMIC-IV"
+      cancer_type      : str   - ICD-10 long title (e.g. "Malignant neoplasm of upper lobe, bronchus or lung")
+      icd_codes        : str   - comma-separated ICD-10 codes (e.g. "C34.12, C78.01")
+      chief_complaint  : str   - Chief Complaint section from discharge note
+      treatment_summary: str   - Assessment & Plan section from discharge note
+      lab_findings     : str   - key lab findings (if available)
+      severity         : str   - derived from discharge disposition (CRITICAL / HIGH / LOW)
+      source           : str   - always "MIMIC-IV"
   }
 """
 

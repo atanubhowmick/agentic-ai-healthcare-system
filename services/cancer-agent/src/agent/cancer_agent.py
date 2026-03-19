@@ -15,7 +15,8 @@ from langchain.tools import tool
 from langchain_openai import ChatOpenAI
 from deepagents import create_deep_agent
 
-from core.config import OPENAI_MODEL
+from core.config import OPENAI_MODEL, MIMIC_SIMILARITY_THRESHOLD, MIMIC_PARTIAL_THRESHOLD
+from rag.mimic_retriever import search_similar_cases, is_collection_populated
 from log.logger import logger
 
 
@@ -70,9 +71,6 @@ def search_mimic_cases(symptoms: str, top_k: int = 3) -> str:
         symptoms: Patient symptoms or clinical presentation text to search against.
         top_k: Number of similar cases to retrieve (default 3).
     """
-    from rag.mimic_retriever import search_similar_cases, is_collection_populated
-    from core.config import MIMIC_SIMILARITY_THRESHOLD, MIMIC_PARTIAL_THRESHOLD
-
     if not is_collection_populated():
         logger.debug("MIMIC collection unavailable - skipping RAG search")
         return "MIMIC-IV database is not available. Proceed with LLM-only diagnosis."

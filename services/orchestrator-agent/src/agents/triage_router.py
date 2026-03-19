@@ -3,21 +3,21 @@
 
 Decision cascade (each tier escalates only when confidence is insufficient):
 
-  Tier 1 — Rule Router              : keyword dominance >= RULE_DOMINANCE_RATIO           (~0ms,   free)
-  Tier 2 — BioBERT Zero-Shot NLI    : top label score   >= BIOBERT_CONFIDENCE_THRESHOLD   (~150ms, free)
-  Tier 3 — ClinicalBERT Classifier  : softmax probability >= CLINICAL_CONFIDENCE_THRESHOLD (~120ms, free)
-  Tier 4 — LLM Fallback             : gpt-5.2 (always returns)                            (~600ms, paid)
+  Tier 1 - Rule Router              : keyword dominance >= RULE_DOMINANCE_RATIO           (~0ms,   free)
+  Tier 2 - BioBERT Zero-Shot NLI    : top label score   >= BIOBERT_CONFIDENCE_THRESHOLD   (~150ms, free)
+  Tier 3 - ClinicalBERT Classifier  : softmax probability >= CLINICAL_CONFIDENCE_THRESHOLD (~120ms, free)
+  Tier 4 - LLM Fallback             : gpt-5.2 (always returns)                            (~600ms, paid)
 
 Models:
   Tier 2: pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb
           Used as zero-shot-classification pipeline (NLI entailment scoring).
-          No exemplar sentences needed — the model scores each candidate label directly.
+          No exemplar sentences needed - the model scores each candidate label directly.
   Tier 3: Fine-tuned emilyalsentzer/Bio_ClinicalBERT                (AutoModelForSequenceClassification)
           Loaded from CLINICALBERT_MODEL_DIR (produced by train_clinicalbert.py).
           If the model directory does not exist, Tier 3 is skipped gracefully.
   Tier 4: ChatOpenAI(model="gpt-5.2", temperature=0)
 
-secondary_check_needed is determined by a pure keyword rule at every tier — no LLM required.
+secondary_check_needed is determined by a pure keyword rule at every tier - no LLM required.
 """
 
 import json
@@ -44,10 +44,10 @@ from log.logger import logger
 _BIOBERT_MODEL_NAME = "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
 _BIOBERT_HYPOTHESIS_TEMPLATE = "This patient requires {} specialist care."
 
-# Tier 2 — BioBERT zero-shot NLI pipeline singleton
+# Tier 2 - BioBERT zero-shot NLI pipeline singleton
 _biobert_zsc = None   # transformers zero-shot-classification pipeline
 
-# Tier 3 — Fine-tuned ClinicalBERT classifier singletons
+# Tier 3 - Fine-tuned ClinicalBERT classifier singletons
 _clinicalbert_tokenizer: AutoTokenizer | None = None
 _clinicalbert_clf:       AutoModelForSequenceClassification | None = None
 _clinicalbert_available: bool = False   # True once the fine-tuned model is loaded
@@ -55,7 +55,7 @@ _clinicalbert_available: bool = False   # True once the fine-tuned model is load
 SPECIALISTS = ["cardiology", "neurology", "cancer", "pathology"]
 
 # ---------------------------------------------------------------------------
-# LLM (Tier 4 fallback) — mirrors nodes.py setup
+# LLM (Tier 4 fallback) - mirrors nodes.py setup
 # ---------------------------------------------------------------------------
 _llm = ChatOpenAI(model="gpt-5.2", temperature=0)
 
@@ -163,7 +163,7 @@ def _secondary_check(specialist: str, symptoms_lower: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Tier 2 — BioBERT Zero-Shot NLI: loading
+# Tier 2 - BioBERT Zero-Shot NLI: loading
 # ---------------------------------------------------------------------------
 
 def _load_biobert_zsc():
@@ -189,7 +189,7 @@ async def _get_biobert_zsc():
 
 
 # ---------------------------------------------------------------------------
-# Tier 3 — Fine-tuned ClinicalBERT Classifier: loading
+# Tier 3 - Fine-tuned ClinicalBERT Classifier: loading
 # ---------------------------------------------------------------------------
 
 def _load_clinicalbert_classifier(model_dir: str) -> bool:
@@ -217,7 +217,7 @@ def _load_clinicalbert_classifier(model_dir: str) -> bool:
 
 
 async def _ensure_clinicalbert_loaded() -> bool:
-    """Lazy loader — returns True if the classifier is available."""
+    """Lazy loader - returns True if the classifier is available."""
     global _clinicalbert_available
     if _clinicalbert_available:
         return True
@@ -240,7 +240,7 @@ async def warm_up_models() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Tier 1 — Rule Router
+# Tier 1 - Rule Router
 # ---------------------------------------------------------------------------
 
 def _rule_route(symptoms_lower: str) -> tuple[str | None, float]:
@@ -271,7 +271,7 @@ def _rule_route(symptoms_lower: str) -> tuple[str | None, float]:
 
 
 # ---------------------------------------------------------------------------
-# Tier 2 — BioBERT Zero-Shot NLI Router
+# Tier 2 - BioBERT Zero-Shot NLI Router
 # ---------------------------------------------------------------------------
 
 async def _biobert_route(symptoms: str) -> tuple[str, float]:
@@ -292,7 +292,7 @@ async def _biobert_route(symptoms: str) -> tuple[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# Tier 3 — Fine-tuned ClinicalBERT Classifier
+# Tier 3 - Fine-tuned ClinicalBERT Classifier
 # ---------------------------------------------------------------------------
 
 def _classify_with_clinicalbert(symptoms: str) -> tuple[str, float]:
@@ -325,7 +325,7 @@ async def _clinical_route(symptoms: str) -> tuple[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# Tier 4 — LLM Fallback
+# Tier 4 - LLM Fallback
 # ---------------------------------------------------------------------------
 
 async def _llm_route(symptoms: str) -> tuple[str, bool, str]:
@@ -370,7 +370,7 @@ async def route_symptoms(symptoms: str) -> tuple[str, bool, str]:
         secondary = _secondary_check(specialist, low)
         logger.info("[TRIAGE_ROUTER] Tier 2 (BioBERT NLI) → %s | score=%.3f", specialist, score)
         return specialist, secondary, f"[BioBERT NLI] score={score:.3f}"
-    logger.info("[TRIAGE_ROUTER] Tier 2 (BioBERT NLI) low confidence → %s | score=%.3f — escalating", specialist, score)
+    logger.info("[TRIAGE_ROUTER] Tier 2 (BioBERT NLI) low confidence → %s | score=%.3f - escalating", specialist, score)
 
     # Tier 3: Fine-tuned ClinicalBERT classifier (skipped if model not trained yet)
     if await _ensure_clinicalbert_loaded():
@@ -379,9 +379,9 @@ async def route_symptoms(symptoms: str) -> tuple[str, bool, str]:
             secondary = _secondary_check(specialist, low)
             logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) → %s | prob=%.3f", specialist, score)
             return specialist, secondary, f"[ClinicalBERT] prob={score:.3f}"
-        logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) low confidence → %s | prob=%.3f — escalating to LLM", specialist, score)
+        logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) low confidence → %s | prob=%.3f - escalating to LLM", specialist, score)
     else:
-        logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) unavailable — skipping to LLM")
+        logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) unavailable - skipping to LLM")
 
     # Tier 4: LLM fallback
     specialist, secondary, reasoning = await _llm_route(symptoms)
