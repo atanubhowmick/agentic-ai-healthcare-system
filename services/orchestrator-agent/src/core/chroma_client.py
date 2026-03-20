@@ -13,10 +13,8 @@ import json
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
+from core.config import CHROMA_CHROMA_SIMILARITY_THRESHOLD
 from log.logger import logger
-
-# Minimum cosine similarity (0-1) to accept a cached treatment recommendation
-SIMILARITY_THRESHOLD = 0.90
 
 _diagnosis_collection = None
 _treatment_collection = None
@@ -71,7 +69,7 @@ async def lookup_treatment_recommendation(symptoms: str) -> Tuple[bool, Optional
     Search treatment_outcomes for a semantically similar prior case.
 
     Returns:
-        (True, cached_result)  - if similarity >= SIMILARITY_THRESHOLD
+        (True, cached_result)  - if similarity >= CHROMA_SIMILARITY_THRESHOLD
         (False, None)          - otherwise
     """
     _, treatment_col = _get_collections()
@@ -88,9 +86,9 @@ async def lookup_treatment_recommendation(symptoms: str) -> Tuple[bool, Optional
             return False, None
 
         doc, score = results[0]
-        logger.info("[CHROMA] Best treatment match | similarity: %.4f | threshold: %.2f", score, SIMILARITY_THRESHOLD)
+        logger.info("[CHROMA] Best treatment match | similarity: %.4f | threshold: %.2f", score, CHROMA_SIMILARITY_THRESHOLD)
 
-        if score >= SIMILARITY_THRESHOLD:
+        if score >= CHROMA_SIMILARITY_THRESHOLD:
             metadata = doc.metadata
             cached_result = {
                 "source": "chroma_cache",

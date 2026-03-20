@@ -73,19 +73,44 @@ log = logging.getLogger("train_triage")
 # ---------------------------------------------------------------------------
 
 _BASE_MODEL  = "emilyalsentzer/Bio_ClinicalBERT"
-_MAX_LENGTH  = 64
+_MAX_LENGTH  = 128
 _RANDOM_SEED = 42
 
+# Label map — keep in sync with LABEL2ID in core/config.py (used by the runtime).
 LABEL2ID: dict[str, int] = {
-    "cardiology": 0,
-    "neurology":  1,
-    "cancer":     2,
-    "pathology":  3,
+    "cardiology":         0,
+    "neurology":          1,
+    "cancer":             2,
+    "pathology":          3,
+    "gastroenterology":   4,
+    "dermatology":        5,
+    "orthopedics":        6,
+    "pulmonology":        7,
+    "urology":            8,
+    "endocrinology":      9,
+    "psychiatry":         10,
+    "ophthalmology":      11,
+    "rheumatology":       12,
+    "nephrology":         13,
+    "gynecology":         14,
+    "hematology":         15,
+    "infectious_disease": 16,
+    "allergy":            17,
+    "otolaryngology":     18,
+    "unknown":            19,
 }
 ID2LABEL: dict[int, str] = {v: k for k, v in LABEL2ID.items()}
 
 # ---------------------------------------------------------------------------
-# Disease → specialist label keyword rules (priority: cancer > neuro > cardio > pathology)
+# Disease → specialist label keyword rules
+# Priority: cancer > neurology > cardiology > psychiatry > pulmonology >
+#           endocrinology > gastroenterology > nephrology > urology >
+#           dermatology > rheumatology > orthopedics > ophthalmology >
+#           pathology (strict: blood/lab disorders only) > unknown
+# New domains (gynecology, hematology, infectious_disease, allergy,
+# otolaryngology) are intentionally left without keyword rules — the
+# disease CSV loader will classify unmatched diseases as "unknown" and
+# the model learns those labels from whatever examples exist in the data.
 # ---------------------------------------------------------------------------
 
 _CANCER_KW = [
@@ -119,20 +144,110 @@ _CARDIO_KW = [
     "deep vein thrombosis", "pulmonary embolism", "cardiac arrest",
     "congestive",
 ]
+_PSYCHIATRY_KW = [
+    "psychiat", "mental health", "depression", "anxiety", "schizophrenia",
+    "bipolar", "ptsd", "ocd", "panic disorder", "phobia", "eating disorder",
+    "anorexia", "bulimia", "adhd", "autism", "personality disorder",
+    "psychosis", "hallucination", "suicid", "insomnia", "sleep disorder",
+    "dissociative", "somatoform", "substance abuse", "addiction",
+]
+_PULMO_KW = [
+    "pulmon", "lung", "respiratory", "asthma", "copd", "bronch", "pneumon",
+    "pleuris", "emphysema", "tuberculosis", "sleep apnea", "sarcoidosis",
+    "interstitial lung", "pneumothorax", "cystic fibrosis", "bronchiectasis",
+    "hypoxia", "wheez", "airway", "trachea", "larynx", "vocal cord",
+]
+_ENDOCRINE_KW = [
+    "endocrin", "diabetes", "diabetic", "thyroid", "hypothyroid", "hyperthyroid",
+    "adrenal", "pituitary", "cushing", "addison", "insulin resistance",
+    "hyperglycemia", "hypoglycemia", "goiter", "hormone", "metabolic syndrome",
+    "polycystic ovary", "pcos", "acromegaly", "hyperparathyroid",
+    "hypoparathyroid", "obesity endocrine",
+]
+_GASTRO_KW = [
+    "gastro", "stomach", "intestin", "bowel", "colon", "rectal", "hepat",
+    "liver", "pancreatic", "gallbladder", "bile", "esophag", "peptic",
+    "ulcer", "crohn", "colitis", "irritable bowel", "appendic",
+    "gastrointestinal", "gerd", "reflux", "celiac", "diverticular",
+    "hemorrhoid", "hernia", "nausea vomiting", "diarrhea", "constipation",
+    "cholecystitis", "pancreatitis", "cirrhosis", "hepatitis",
+]
+_NEPHRO_KW = [
+    "nephro", "chronic kidney", "glomerulo", "nephritis", "nephrotic",
+    "dialysis", "hemodialysis", "peritoneal dialysis", "renal failure",
+    "renal insufficiency", "proteinuria", "kidney disease",
+]
+_UROLOGY_KW = [
+    "urol", "bladder", "prostate", "ureter", "urethra", "urinary",
+    "incontinence", "hematuria", "urinary tract", "benign prostatic",
+    "erectile", "testicular", "kidney stone", "renal calcul",
+    "cystitis", "pyelonephritis", "overactive bladder",
+]
+_DERMATO_KW = [
+    "dermat", "skin", "rash", "eczema", "psoriasis", "acne", "urticaria",
+    "hives", "cellulitis", "impetigo", "ringworm", "scabies", "vitiligo",
+    "alopecia", "seborrhea", "rosacea", "contact dermatitis", "atopic",
+    "pemphigus", "shingles", "herpes zoster", "nail disorder",
+    "hyperhidrosis", "pruritus", "wound infection",
+]
+_RHEUMATO_KW = [
+    "rheumat", "lupus", "rheumatoid arthritis", "ankylosing",
+    "sjogren", "scleroderma", "vasculitis", "polymyalgia", "raynaud",
+    "antiphospholipid", "myositis", "dermatomyositis", "psoriatic arthritis",
+    "reactive arthritis", "mixed connective tissue",
+]
+_ORTHO_KW = [
+    "ortho", "fracture", "bone", "joint", "ligament", "tendon",
+    "osteo", "scoliosis", "kyphosis", "lumbar", "cervical spine",
+    "hip replacement", "knee", "shoulder pain", "elbow", "wrist",
+    "ankle", "carpal tunnel", "fibromyalgia", "gout", "bursitis",
+    "tendinitis", "dislocation", "sprain", "strain", "back pain",
+    "neck pain", "disc herniation", "spinal stenosis",
+]
+_OPHTHALMO_KW = [
+    "ophthalm", "eye", "vision", "glaucoma", "cataract", "retinal",
+    "macular", "conjunctivit", "uveitis", "keratitis", "blepharitis",
+    "strabismus", "amblyopia", "diabetic retinopathy", "optic neuritis",
+    "dry eye", "corneal", "vitreous", "pterygium",
+]
+# Pathology is STRICT: only genuine blood/haematology/lab disorders
+_PATHOLOGY_KW = [
+    "anemia", "anaemia", "hemophilia", "haemophilia", "thrombocytopenia",
+    "thrombocytosis", "leukocytosis", "thalassemia", "sickle cell",
+    "blood disorder", "coagulation disorder", "clotting disorder",
+    "hemolytic", "haemolytic", "aplastic", "myelofibrosis",
+    "iron deficiency", "vitamin b12 deficiency", "folate deficiency",
+    "pernicious", "hematologic", "haematologic", "blood dyscrasia",
+    "sepsis", "septicemia", "bacteremia",
+]
+
+# Priority order: most specific → least specific
+# New domains (gynecology, hematology, infectious_disease, allergy,
+# otolaryngology) have no keyword rules — unmatched diseases fall to "unknown".
+_DOMAIN_PRIORITY = [
+    ("cancer",           _CANCER_KW),
+    ("neurology",        _NEURO_KW),
+    ("cardiology",       _CARDIO_KW),
+    ("psychiatry",       _PSYCHIATRY_KW),
+    ("pulmonology",      _PULMO_KW),
+    ("endocrinology",    _ENDOCRINE_KW),
+    ("gastroenterology", _GASTRO_KW),
+    ("nephrology",       _NEPHRO_KW),
+    ("urology",          _UROLOGY_KW),
+    ("dermatology",      _DERMATO_KW),
+    ("rheumatology",     _RHEUMATO_KW),
+    ("orthopedics",      _ORTHO_KW),
+    ("ophthalmology",    _OPHTHALMO_KW),
+    ("pathology",        _PATHOLOGY_KW),
+]
 
 
 def _classify_disease(disease_name: str) -> str:
     d = disease_name.lower()
-    for kw in _CANCER_KW:
-        if kw in d:
-            return "cancer"
-    for kw in _NEURO_KW:
-        if kw in d:
-            return "neurology"
-    for kw in _CARDIO_KW:
-        if kw in d:
-            return "cardiology"
-    return "pathology"
+    for label, keywords in _DOMAIN_PRIORITY:
+        if any(kw in d for kw in keywords):
+            return label
+    return "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -207,9 +322,15 @@ def load_disease_csv(
 # ---------------------------------------------------------------------------
 
 class _TriageDataset(Dataset):
-    def __init__(self, samples: list[tuple[str, str]], tokenizer: AutoTokenizer) -> None:
+    def __init__(
+        self,
+        samples: list[tuple[str, str]],
+        tokenizer: AutoTokenizer,
+        label2id: dict[str, int],
+    ) -> None:
         self.samples   = samples
         self.tokenizer = tokenizer
+        self.label2id  = label2id
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -224,7 +345,7 @@ class _TriageDataset(Dataset):
             return_tensors="pt",
         )
         item = {k: v.squeeze(0) for k, v in enc.items()}
-        item["labels"] = torch.tensor(LABEL2ID[label], dtype=torch.long)
+        item["labels"] = torch.tensor(self.label2id[label], dtype=torch.long)
         return item
 
 
@@ -269,6 +390,21 @@ def train_and_save(
     log.info("Combined dataset: %d examples | %s", len(all_data),
              " | ".join(f"{k}={v}" for k, v in sorted(label_counts.items())))
 
+    # Build an active label set from labels that actually have training data.
+    # Labels declared in LABEL2ID but with 0 examples (e.g. new domains without
+    # keyword rules yet) are excluded so they don't add untrained softmax neurons
+    # that degrade accuracy for all other labels.
+    active_labels = sorted(label_counts.keys(), key=lambda l: LABEL2ID[l])
+    inactive = [l for l in LABEL2ID if l not in label_counts]
+    if inactive:
+        log.warning(
+            "The following LABEL2ID entries have 0 training examples and will be "
+            "excluded from this training run: %s", inactive
+        )
+    active_label2id = {lbl: idx for idx, lbl in enumerate(active_labels)}
+    active_id2label = {idx: lbl for lbl, idx in active_label2id.items()}
+    log.info("Active labels (%d): %s", len(active_label2id), list(active_label2id.keys()))
+
     rng = random.Random(_RANDOM_SEED)
     rng.shuffle(all_data)
 
@@ -284,13 +420,13 @@ def train_and_save(
     tokenizer = AutoTokenizer.from_pretrained(_BASE_MODEL)
     model = AutoModelForSequenceClassification.from_pretrained(
         _BASE_MODEL,
-        num_labels=len(LABEL2ID),
-        id2label=ID2LABEL,
-        label2id=LABEL2ID,
+        num_labels=len(active_label2id),
+        id2label=active_id2label,
+        label2id=active_label2id,
     )
 
-    train_dataset = _TriageDataset(train_samples, tokenizer)
-    val_dataset   = _TriageDataset(val_samples,   tokenizer)
+    train_dataset = _TriageDataset(train_samples, tokenizer, active_label2id)
+    val_dataset   = _TriageDataset(val_samples,   tokenizer, active_label2id)
 
     training_args = TrainingArguments(
         output_dir=output_dir,
@@ -326,7 +462,7 @@ def train_and_save(
     preds_output = trainer.predict(val_dataset)
     preds  = np.argmax(preds_output.predictions, axis=-1)
     labels_arr = preds_output.label_ids
-    report = classification_report(labels_arr, preds, target_names=list(LABEL2ID.keys()))
+    report = classification_report(labels_arr, preds, target_names=list(active_label2id.keys()))
     log.info("Validation classification report:\n%s", report)
 
     trainer.save_model(output_dir)

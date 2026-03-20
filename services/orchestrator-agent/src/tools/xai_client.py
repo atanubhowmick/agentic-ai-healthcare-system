@@ -1,15 +1,25 @@
 import httpx
+from langchain.tools import tool
 from core.config import XAI_SERVICE_URL, HTTP_TIMEOUT
 from log.logger import logger
 
 
+@tool
 async def call_validate_diagnosis(
     patient_id: str,
     symptoms: str,
     specialist_agent: str,
     diagnosis: dict,
 ) -> dict:
-    """POST /xai-validator/validate-diagnosis and return the parsed response dict."""
+    """Call the XAI Validator service to validate a specialist diagnosis for clinical safety.
+    POST /xai-validator/validate-diagnosis and return the parsed response dict.
+
+    Args:
+        patient_id: Unique patient identifier.
+        symptoms: Original patient symptom description.
+        specialist_agent: Name of the specialist agent that produced the diagnosis.
+        diagnosis: Full diagnosis dict returned by the specialist agent.
+    """
     payload = {
         "patient_id": patient_id,
         "symptoms": symptoms,
@@ -25,6 +35,7 @@ async def call_validate_diagnosis(
         return response.json()
 
 
+@tool
 async def call_validate_treatment(
     patient_id: str,
     specialist_agent: str,
@@ -32,7 +43,16 @@ async def call_validate_treatment(
     severity: str,
     treatment_recommendation: str,
 ) -> dict:
-    """POST /xai-validator/validate-treatment and return the parsed response dict."""
+    """Call the XAI Validator service to validate a treatment recommendation for clinical safety.
+    POST /xai-validator/validate-treatment and return the parsed response dict.
+
+    Args:
+        patient_id: Unique patient identifier.
+        specialist_agent: Name of the specialist agent that produced the diagnosis.
+        diagnosis_summary: Text summary of the specialist diagnosis.
+        severity: Severity level from the diagnosis (LOW/HIGH/CRITICAL).
+        treatment_recommendation: Treatment plan text to be validated.
+    """
     payload = {
         "patient_id": patient_id,
         "specialist_agent": specialist_agent,

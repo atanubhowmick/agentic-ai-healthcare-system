@@ -22,7 +22,7 @@ Conflict / human review:
 import json
 import asyncio
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage, HumanMessage
 from agents.state import AgentState
 from tools.cardiology_client import call_cardiology_api
 from tools.neurology_client import call_neurology_api
@@ -30,7 +30,7 @@ from tools.pathology_client import call_pathology_api
 from tools.cancer_client import call_cancer_api
 from tools.treatment_client import call_treatment_api
 from tools.xai_client import call_validate_diagnosis, call_validate_treatment
-from core.config import MAX_RETRY_COUNT
+from core.config import MAX_RETRY_COUNT, OPENAI_MODEL
 from agents.triage_router import route_symptoms
 from core.mongo_client import save_case
 from core.chroma_client import (
@@ -40,12 +40,11 @@ from core.chroma_client import (
 )
 from log.logger import logger
 
-_llm = ChatOpenAI(model="gpt-5.2", temperature=0)
+_llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
 
 # -- Prompts ------------------------------------------------------------------
 
-_CONFLICT_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", """You are a medical conflict resolution specialist.
+_CONFLICT_SYSTEM = """You are a medical conflict resolution specialist.
 Two AI agents have assessed the same patient. Determine whether their findings materially conflict.
 
 A CONFLICT exists when:
@@ -54,24 +53,23 @@ A CONFLICT exists when:
 - Emergency care recommendations significantly disagree
 
 Respond ONLY with valid JSON (no markdown):
-{{
+{
     "conflict_detected": false,
     "conflict_reason": "No significant conflict detected between the two assessments.",
     "resolution_needed": false
-}}"""),
-    ("human", """Primary Assessment ({primary_agent}):
-{primary_summary}
-Severity: {primary_severity}
-
-Secondary Assessment ({secondary_agent}):
-{secondary_summary}
-Severity: {secondary_severity}"""),
-])
-
-_conflict_chain = _CONFLICT_PROMPT | _llm
+}"""
 
 
 # -- Helpers ------------------------------------------------------------------
+
+def _fire_and_forget(coro) -> None:
+    """Schedule a background coroutine and log any exception it raises."""
+    task = asyncio.create_task(coro)
+    task.add_done_callback(
+        lambda t: logger.error("[BACKGROUND_TASK] Failed: %s", t.exception())
+        if not t.cancelled() and t.exception() is not None else None
+    )
+
 
 def _parse_json(content: str) -> dict:
     content = content.strip()
@@ -196,16 +194,16 @@ async def specialist_node(state: AgentState) -> dict:
 
     try:
         if specialist == "cardiology":
-            data = await call_cardiology_api(patient_id, symptoms, is_followup)
+            data = await call_cardiology_api.ainvoke({"patient_id": patient_id, "symptoms": symptoms, "is_followup": is_followup})
             agent_name = "Cardiology_Specialist"
         elif specialist == "neurology":
-            data = await call_neurology_api(patient_id, symptoms, is_followup)
+            data = await call_neurology_api.ainvoke({"patient_id": patient_id, "symptoms": symptoms, "is_followup": is_followup})
             agent_name = "Neurology_Specialist"
         elif specialist == "pathology":
-            data = await call_pathology_api(patient_id, symptoms, is_followup)
+            data = await call_pathology_api.ainvoke({"patient_id": patient_id, "symptoms": symptoms, "is_followup": is_followup})
             agent_name = "Pathology_Specialist"
         elif specialist == "cancer":
-            data = await call_cancer_api(patient_id, symptoms, is_followup)
+            data = await call_cancer_api.ainvoke({"patient_id": patient_id, "symptoms": symptoms, "is_followup": is_followup})
             agent_name = "Cancer_Oncology_Specialist"
         else:
             return {
@@ -259,7 +257,7 @@ async def secondary_check_node(state: AgentState) -> dict:
     logger.info("[SECONDARY_CHECK] Running pathology cross-check | patient: %s", patient_id)
 
     try:
-        data = await call_pathology_api(patient_id, symptoms, is_followup=False)
+        data = await call_pathology_api.ainvoke({"patient_id": patient_id, "symptoms": symptoms, "is_followup": False})
 
         secondary_diagnosis = None
         if data.get("is_success") and data.get("payload"):
@@ -318,14 +316,13 @@ async def conflict_check_node(state: AgentState) -> dict:
     )
 
     try:
-        result = _conflict_chain.invoke({
-            "primary_agent": primary_agent,
-            "primary_summary": primary_summary,
-            "primary_severity": primary_severity,
-            "secondary_agent": secondary_agent,
-            "secondary_summary": secondary_summary,
-            "secondary_severity": secondary_severity,
-        })
+        result = await _llm.ainvoke([
+            SystemMessage(content=_CONFLICT_SYSTEM),
+            HumanMessage(content=(
+                f"Primary Assessment ({primary_agent}):\n{primary_summary}\nSeverity: {primary_severity}\n\n"
+                f"Secondary Assessment ({secondary_agent}):\n{secondary_summary}\nSeverity: {secondary_severity}"
+            )),
+        ])
         raw = _parse_json(result.content)
         conflict = bool(raw.get("conflict_detected", False))
         reason = raw.get("conflict_reason", "")
@@ -374,7 +371,7 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
     logger.info("[XAI_DIAGNOSIS] patient: %s | attempt: %d/%d", patient_id, attempt, MAX_RETRY_COUNT)
 
     try:
-        xai_result = await call_validate_diagnosis(patient_id, symptoms, specialist_agent, diagnosis)
+        xai_result = await call_validate_diagnosis.ainvoke({"patient_id": patient_id, "symptoms": symptoms, "specialist_agent": specialist_agent, "diagnosis": diagnosis})
         payload = xai_result.get("payload", {}) if xai_result.get("is_success") else {}
         is_validated = payload.get("result", {}).get("is_validated", False)
 
@@ -383,7 +380,7 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
         if is_validated:
             logger.info("[XAI_DIAGNOSIS] Validated | patient: %s", patient_id)
             # Step 2.4.1: Save validated diagnosis to ChromaDB (fire-and-forget)
-            asyncio.create_task(save_diagnosis_outcome(
+            _fire_and_forget(save_diagnosis_outcome(
                 patient_id=patient_id,
                 symptoms=symptoms,
                 specialist_agent=specialist_agent,
@@ -467,15 +464,15 @@ async def treatment_node(state: AgentState) -> dict:
     logger.info("[TREATMENT] patient: %s | severity: %s | retry: %d", patient_id, severity, retry)
 
     try:
-        raw = await call_treatment_api(
-            patient_id=patient_id,
-            diagnosis=f"[{severity}] {summary}",
-            specialist_notes=(
+        raw = await call_treatment_api.ainvoke({
+            "patient_id": patient_id,
+            "diagnosis": f"[{severity}] {summary}",
+            "specialist_notes": (
                 f"Specialist: {specialist_agent}. "
                 f"Hospitalization: {diagnosis.get('hospitalizationNeeded', 'N/A')}. "
                 f"Emergency: {diagnosis.get('emergencyCareNeeded', 'N/A')}."
             ),
-        )
+        })
         # Unwrap GenericResponse[TreatmentResponse] wrapper
         treatment_payload = None
         if raw.get("is_success") and raw.get("payload"):
@@ -519,13 +516,13 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
     logger.info("[XAI_TREATMENT] patient: %s | attempt: %d/%d", patient_id, attempt, MAX_RETRY_COUNT)
 
     try:
-        xai_result = await call_validate_treatment(
-            patient_id=patient_id,
-            specialist_agent=state.get("specialist_agent", "Unknown_Specialist"),
-            diagnosis_summary=summary,
-            severity=severity,
-            treatment_recommendation=treatment_rec,
-        )
+        xai_result = await call_validate_treatment.ainvoke({
+            "patient_id": patient_id,
+            "specialist_agent": state.get("specialist_agent", "Unknown_Specialist"),
+            "diagnosis_summary": summary,
+            "severity": severity,
+            "treatment_recommendation": treatment_rec,
+        })
         payload = xai_result.get("payload", {}) if xai_result.get("is_success") else {}
         is_validated = payload.get("result", {}).get("is_validated", False)
 
@@ -534,7 +531,7 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
         if is_validated:
             logger.info("[XAI_TREATMENT] Validated | patient: %s", patient_id)
             # Step 2.6.1: Save validated treatment to ChromaDB (fire-and-forget)
-            asyncio.create_task(save_treatment_outcome(
+            _fire_and_forget(save_treatment_outcome(
                 patient_id=patient_id,
                 symptoms=symptoms,
                 specialist_agent=state.get("specialist_agent", "Unknown_Specialist"),
@@ -620,7 +617,7 @@ async def finish_node(state: AgentState) -> dict:
             "[FINISH] Cache-hit path | patient: %s | status: %s",
             patient_id, final_response.get("status"),
         )
-        asyncio.create_task(save_case(final_response))
+        _fire_and_forget(save_case(final_response))
         return {"final_response": final_response}
 
     requires_review = state.get("requires_human_review", False)

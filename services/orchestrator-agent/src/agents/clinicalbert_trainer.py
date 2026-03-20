@@ -18,17 +18,10 @@ from transformers import (
     TrainingArguments,
 )
 
+from core.config import LABEL2ID, ID2LABEL
 from log.logger import logger
 
 _BASE_MODEL  = "emilyalsentzer/Bio_ClinicalBERT"
-
-LABEL2ID: dict[str, int] = {
-    "cardiology": 0,
-    "neurology":  1,
-    "cancer":     2,
-    "pathology":  3,
-}
-ID2LABEL: dict[int, str] = {v: k for k, v in LABEL2ID.items()}
 _MAX_LENGTH  = 128
 _RANDOM_SEED = 42
 
