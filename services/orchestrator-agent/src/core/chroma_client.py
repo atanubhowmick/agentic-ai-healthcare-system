@@ -13,7 +13,7 @@ import json
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
-from core.config import CHROMA_CHROMA_SIMILARITY_THRESHOLD
+from core.config import CHROMA_SIMILARITY_THRESHOLD
 from log.logger import logger
 
 _diagnosis_collection = None
