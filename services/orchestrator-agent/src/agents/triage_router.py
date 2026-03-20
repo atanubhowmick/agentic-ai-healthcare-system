@@ -26,9 +26,11 @@ import os
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from core.config import (
+    OPENAI_MODEL,
+    TRIAGE_SPECIALISTS,
     RULE_DOMINANCE_RATIO,
     RULE_MIN_KEYWORD_HITS,
     BIOBERT_CONFIDENCE_THRESHOLD,
@@ -52,15 +54,20 @@ _clinicalbert_tokenizer: AutoTokenizer | None = None
 _clinicalbert_clf:       AutoModelForSequenceClassification | None = None
 _clinicalbert_available: bool = False   # True once the fine-tuned model is loaded
 
-SPECIALISTS = ["cardiology", "neurology", "cancer", "pathology"]
+# Zero-shot NLI candidate labels — sourced from config so adding a new
+# specialist agent only requires one change in core/config.py.
+SPECIALISTS = TRIAGE_SPECIALISTS
+
+# ClinicalBERT may predict one of the 20 extended training labels;
+# any prediction outside this set falls through to the LLM (Tier 4).
+_SUPPORTED_SPECIALISTS: set[str] = set(TRIAGE_SPECIALISTS)
 
 # ---------------------------------------------------------------------------
 # LLM (Tier 4 fallback) - mirrors nodes.py setup
 # ---------------------------------------------------------------------------
-_llm = ChatOpenAI(model="gpt-5.2", temperature=0)
+_llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
 
-_TRIAGE_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", """You are the Master Orchestrator for an Agentic Healthcare Framework.
+_TRIAGE_SYSTEM = """You are the Master Orchestrator for an Agentic Healthcare Framework.
 Triage patient symptoms and route to the most appropriate medical specialist.
 
 Available specialists:
@@ -74,16 +81,12 @@ Set secondary_check_needed=true when the case involves cardiology, neurology, or
 the symptoms suggest significant lab abnormalities (e.g. elevated enzymes, abnormal CBC, high tumour markers).
 
 Respond ONLY with valid JSON (no markdown):
-{{
+{
     "specialist": "cardiology",
     "secondary_check_needed": false,
     "reasoning": "one-sentence rationale"
-}}
-specialist must be one of: cardiology, neurology, cancer, pathology, unknown"""),
-    ("human", "Patient symptoms: {symptoms}"),
-])
-
-_triage_chain = _TRIAGE_PROMPT | _llm
+}
+specialist must be one of: cardiology, neurology, cancer, pathology, unknown"""
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +317,7 @@ def _classify_with_clinicalbert(symptoms: str) -> tuple[str, float]:
     confidence = float(probs.max())
     idx = int(probs.argmax())
     # Use the label map stored in the model config (set during fine-tuning)
-    label = _clinicalbert_clf.config.id2label.get(idx, SPECIALISTS[idx])
+    label = _clinicalbert_clf.config.id2label.get(idx, "unknown")
     return label, confidence
 
 
@@ -329,10 +332,10 @@ async def _clinical_route(symptoms: str) -> tuple[str, float]:
 # ---------------------------------------------------------------------------
 
 async def _llm_route(symptoms: str) -> tuple[str, bool, str]:
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None, _triage_chain.invoke, {"symptoms": symptoms}
-    )
+    result = await _llm.ainvoke([
+        SystemMessage(content=_TRIAGE_SYSTEM),
+        HumanMessage(content=f"Patient symptoms: {symptoms}"),
+    ])
     raw = _parse_json(result.content)
     specialist = raw.get("specialist", "unknown").lower().strip()
     secondary  = bool(raw.get("secondary_check_needed", False))
@@ -375,11 +378,17 @@ async def route_symptoms(symptoms: str) -> tuple[str, bool, str]:
     # Tier 3: Fine-tuned ClinicalBERT classifier (skipped if model not trained yet)
     if await _ensure_clinicalbert_loaded():
         specialist, score = await _clinical_route(symptoms)
-        if score >= CLINICAL_CONFIDENCE_THRESHOLD:
+        if specialist not in _SUPPORTED_SPECIALISTS:
+            logger.info(
+                "[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) predicted unsupported domain '%s' - escalating to LLM",
+                specialist,
+            )
+        elif score >= CLINICAL_CONFIDENCE_THRESHOLD:
             secondary = _secondary_check(specialist, low)
             logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) → %s | prob=%.3f", specialist, score)
             return specialist, secondary, f"[ClinicalBERT] prob={score:.3f}"
-        logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) low confidence → %s | prob=%.3f - escalating to LLM", specialist, score)
+        else:
+            logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) low confidence → %s | prob=%.3f - escalating to LLM", specialist, score)
     else:
         logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) unavailable - skipping to LLM")
 
