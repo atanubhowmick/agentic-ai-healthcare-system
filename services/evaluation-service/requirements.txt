@@ -1,5 +1,23 @@
-fastapi[standard]
-numpy
-scikit-learn
-matplotlib
-prometheus-client
+# Web framework
+fastapi[standard]>=0.115.0
+
+# Data validation
+pydantic>=2.10.0
+
+# Metrics & data processing
+numpy>=2.0.0
+scikit-learn>=1.6.0
+scipy>=1.13.0
+matplotlib>=3.10.0
+
+# HTTP client (batch calls to cancer-agent API)
+httpx>=0.28.0
+
+# Monitoring
+prometheus-client>=0.22.0
+
+# MongoDB (synchronous client for CLI + background evaluator)
+pymongo>=4.10.0
+
+# Utilities
+python-dotenv>=1.2.0

@@ -2,7 +2,7 @@
 LangGraph node implementations for the Healthcare Orchestrator.
 
 Node execution order (happy path):
-  chroma_lookup → triage → specialist → [secondary_check → conflict_check]
+  chroma_lookup → classifier → specialist → [secondary_check → conflict_check]
   → xai_diagnosis_validator → treatment → xai_treatment_validator → finish
 
 ChromaDB integration:
@@ -31,7 +31,7 @@ from tools.cancer_client import call_cancer_api
 from tools.treatment_client import call_treatment_api
 from tools.xai_client import call_validate_diagnosis, call_validate_treatment
 from core.config import MAX_RETRY_COUNT, OPENAI_MODEL
-from agents.triage_router import route_symptoms
+from agents.classifier_router import route_symptoms
 from core.mongo_client import save_case
 from core.chroma_client import (
     lookup_treatment_recommendation,
@@ -153,10 +153,10 @@ async def chroma_lookup_node(state: AgentState) -> dict:
     }
 
 
-async def triage_node(state: AgentState) -> dict:
-    """Hybrid triage: Rule → BioBERT → ClinicalBERT → LLM fallback."""
+async def classifier_node(state: AgentState) -> dict:
+    """Hybrid classifier: Rule → BioBERT → ClinicalBERT → LLM fallback."""
     symptoms = state.get("symptoms", "")
-    logger.info("[TRIAGE] patient: %s | symptoms: %.100s...", state.get("patient_id"), symptoms)
+    logger.info("[CLASSIFIER] patient: %s | symptoms: %.100s...", state.get("patient_id"), symptoms)
 
     try:
         specialist, secondary_needed, reasoning = await route_symptoms(symptoms)
@@ -164,21 +164,21 @@ async def triage_node(state: AgentState) -> dict:
         if specialist not in ("cardiology", "neurology", "cancer", "pathology"):
             specialist = "unknown"
 
-        logger.info("[TRIAGE] → %s | secondary: %s | reason: %s", specialist, secondary_needed, reasoning)
+        logger.info("[CLASSIFIER] → %s | secondary: %s | reason: %s", specialist, secondary_needed, reasoning)
         return {
             "assigned_specialist": specialist,
             "secondary_check_needed": secondary_needed,
             "messages": [
-                f"[TRIAGE] Routing to '{specialist}'. "
+                f"[CLASSIFIER] Routing to '{specialist}'. "
                 f"Secondary check: {secondary_needed}. Reason: {reasoning}"
             ],
         }
     except Exception as e:
-        logger.error("[TRIAGE] Failed: %s", str(e))
+        logger.error("[CLASSIFIER] Failed: %s", str(e))
         return {
             "assigned_specialist": "unknown",
             "secondary_check_needed": False,
-            "messages": [f"[TRIAGE] Error during triage: {str(e)}"],
+            "messages": [f"[CLASSIFIER] Error: {str(e)}"],
         }
 
 

@@ -1,5 +1,5 @@
 """
-4-Tier Hybrid Triage Router
+4-Tier Hybrid Classifier Router
 
 Decision cascade (each tier escalates only when confidence is insufficient):
 
@@ -30,7 +30,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from core.config import (
     OPENAI_MODEL,
-    TRIAGE_SPECIALISTS,
+    CLASSIFIER_SPECIALISTS,
     RULE_DOMINANCE_RATIO,
     RULE_MIN_KEYWORD_HITS,
     BIOBERT_CONFIDENCE_THRESHOLD,
@@ -56,18 +56,18 @@ _clinicalbert_available: bool = False   # True once the fine-tuned model is load
 
 # Zero-shot NLI candidate labels — sourced from config so adding a new
 # specialist agent only requires one change in core/config.py.
-SPECIALISTS = TRIAGE_SPECIALISTS
+SPECIALISTS = CLASSIFIER_SPECIALISTS
 
 # ClinicalBERT may predict one of the 20 extended training labels;
 # any prediction outside this set falls through to the LLM (Tier 4).
-_SUPPORTED_SPECIALISTS: set[str] = set(TRIAGE_SPECIALISTS)
+_SUPPORTED_SPECIALISTS: set[str] = set(CLASSIFIER_SPECIALISTS)
 
 # ---------------------------------------------------------------------------
 # LLM (Tier 4 fallback) - mirrors nodes.py setup
 # ---------------------------------------------------------------------------
 _llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
 
-_TRIAGE_SYSTEM = """You are the Master Orchestrator for an Agentic Healthcare Framework.
+_CLASSIFIER_SYSTEM = """You are the Master Orchestrator for an Agentic Healthcare Framework.
 Triage patient symptoms and route to the most appropriate medical specialist.
 
 Available specialists:
@@ -172,13 +172,13 @@ def _secondary_check(specialist: str, symptoms_lower: str) -> bool:
 def _load_biobert_zsc():
     """Load the BioBERT zero-shot-classification pipeline (blocking)."""
     global _biobert_zsc
-    logger.info("[TRIAGE_ROUTER] Loading BioBERT zero-shot-classification pipeline: %s", _BIOBERT_MODEL_NAME)
+    logger.info("[CLASSIFIER_ROUTER] Loading BioBERT zero-shot-classification pipeline: %s", _BIOBERT_MODEL_NAME)
     _biobert_zsc = pipeline(
         "zero-shot-classification",
         model=_BIOBERT_MODEL_NAME,
         device=-1,   # CPU; set device=0 for GPU
     )
-    logger.info("[TRIAGE_ROUTER] BioBERT zero-shot pipeline ready.")
+    logger.info("[CLASSIFIER_ROUTER] BioBERT zero-shot pipeline ready.")
 
 
 async def _get_biobert_zsc():
@@ -204,17 +204,17 @@ def _load_clinicalbert_classifier(model_dir: str) -> bool:
     global _clinicalbert_tokenizer, _clinicalbert_clf, _clinicalbert_available
     if not os.path.isdir(model_dir):
         logger.warning(
-            "[TRIAGE_ROUTER] ClinicalBERT model not found at '%s'. "
-            "Run train_triage_classifier.py to generate it. Tier 3 will be skipped.",
+            "[CLASSIFIER_ROUTER] ClinicalBERT model not found at '%s'. "
+            "Run train_clinicalbert_classifier.py to generate it. Tier 3 will be skipped.",
             model_dir,
         )
         return False
-    logger.info("[TRIAGE_ROUTER] Loading fine-tuned ClinicalBERT from: %s", model_dir)
+    logger.info("[CLASSIFIER_ROUTER] Loading fine-tuned ClinicalBERT from: %s", model_dir)
     _clinicalbert_tokenizer = AutoTokenizer.from_pretrained(model_dir)
     _clinicalbert_clf = AutoModelForSequenceClassification.from_pretrained(model_dir)
     _clinicalbert_clf.eval()
     _clinicalbert_available = True
-    logger.info("[TRIAGE_ROUTER] ClinicalBERT classifier loaded | labels: %s",
+    logger.info("[CLASSIFIER_ROUTER] ClinicalBERT classifier loaded | labels: %s",
                 list(_clinicalbert_clf.config.id2label.values()))
     return True
 
@@ -239,7 +239,7 @@ async def warm_up_models() -> None:
     Call from FastAPI lifespan to eliminate cold-start latency."""
     await _get_biobert_zsc()
     await _ensure_clinicalbert_loaded()
-    logger.info("[TRIAGE_ROUTER] All models warm and ready.")
+    logger.info("[CLASSIFIER_ROUTER] All models warm and ready.")
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +261,7 @@ def _rule_route(symptoms_lower: str) -> tuple[str | None, float]:
         for s, kws in _KEYWORD_MAP.items()
     }
     total = sum(counts.values())
-    logger.info("[TRIAGE_ROUTER] Tier 1 (Rule) keyword hits | total=%d (min=%d) | %s",
+    logger.info("[CLASSIFIER_ROUTER] Tier 1 (Rule) keyword hits | total=%d (min=%d) | %s",
                 total, RULE_MIN_KEYWORD_HITS,
                 ", ".join(f"{s}={c}" for s, c in counts.items()))
     if total < RULE_MIN_KEYWORD_HITS:
@@ -333,7 +333,7 @@ async def _clinical_route(symptoms: str) -> tuple[str, float]:
 
 async def _llm_route(symptoms: str) -> tuple[str, bool, str]:
     result = await _llm.ainvoke([
-        SystemMessage(content=_TRIAGE_SYSTEM),
+        SystemMessage(content=_CLASSIFIER_SYSTEM),
         HumanMessage(content=f"Patient symptoms: {symptoms}"),
     ])
     raw = _parse_json(result.content)
@@ -364,35 +364,35 @@ async def route_symptoms(symptoms: str) -> tuple[str, bool, str]:
     specialist, conf = _rule_route(low)
     if specialist is not None:
         secondary = _secondary_check(specialist, low)
-        logger.info("[TRIAGE_ROUTER] Tier 1 (Rule) → %s | conf=%.2f", specialist, conf)
+        logger.info("[CLASSIFIER_ROUTER] Tier 1 (Rule) → %s | conf=%.2f", specialist, conf)
         return specialist, secondary, f"[Rule] conf={conf:.2f}"
 
     # Tier 2: BioBERT embedding
     specialist, score = await _biobert_route(symptoms)
     if score >= BIOBERT_CONFIDENCE_THRESHOLD:
         secondary = _secondary_check(specialist, low)
-        logger.info("[TRIAGE_ROUTER] Tier 2 (BioBERT NLI) → %s | score=%.3f", specialist, score)
+        logger.info("[CLASSIFIER_ROUTER] Tier 2 (BioBERT NLI) → %s | score=%.3f", specialist, score)
         return specialist, secondary, f"[BioBERT NLI] score={score:.3f}"
-    logger.info("[TRIAGE_ROUTER] Tier 2 (BioBERT NLI) low confidence → %s | score=%.3f - escalating", specialist, score)
+    logger.info("[CLASSIFIER_ROUTER] Tier 2 (BioBERT NLI) low confidence → %s | score=%.3f - escalating", specialist, score)
 
     # Tier 3: Fine-tuned ClinicalBERT classifier (skipped if model not trained yet)
     if await _ensure_clinicalbert_loaded():
         specialist, score = await _clinical_route(symptoms)
         if specialist not in _SUPPORTED_SPECIALISTS:
             logger.info(
-                "[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) predicted unsupported domain '%s' - escalating to LLM",
+                "[CLASSIFIER_ROUTER] Tier 3 (ClinicalBERT) predicted unsupported domain '%s' - escalating to LLM",
                 specialist,
             )
         elif score >= CLINICAL_CONFIDENCE_THRESHOLD:
             secondary = _secondary_check(specialist, low)
-            logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) → %s | prob=%.3f", specialist, score)
+            logger.info("[CLASSIFIER_ROUTER] Tier 3 (ClinicalBERT) → %s | prob=%.3f", specialist, score)
             return specialist, secondary, f"[ClinicalBERT] prob={score:.3f}"
         else:
-            logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) low confidence → %s | prob=%.3f - escalating to LLM", specialist, score)
+            logger.info("[CLASSIFIER_ROUTER] Tier 3 (ClinicalBERT) low confidence → %s | prob=%.3f - escalating to LLM", specialist, score)
     else:
-        logger.info("[TRIAGE_ROUTER] Tier 3 (ClinicalBERT) unavailable - skipping to LLM")
+        logger.info("[CLASSIFIER_ROUTER] Tier 3 (ClinicalBERT) unavailable - skipping to LLM")
 
     # Tier 4: LLM fallback
     specialist, secondary, reasoning = await _llm_route(symptoms)
-    logger.info("[TRIAGE_ROUTER] Tier 4 (LLM) → %s | reason: %s", specialist, reasoning)
+    logger.info("[CLASSIFIER_ROUTER] Tier 4 (LLM) → %s | reason: %s", specialist, reasoning)
     return specialist, secondary, f"[LLM] {reasoning}"

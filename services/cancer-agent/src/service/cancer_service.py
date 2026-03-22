@@ -16,6 +16,7 @@ from agent.cancer_agent import cancer_executor, BASE_SYSTEM
 from datamodel.models import DiagnosisRequest, DiagnosisResult, DiagnosisResponse
 from exception.exceptions import CancerSvcException
 from log.logger import logger
+from rag.tfidf_predictor import predict_diagnosis_fields
 
 
 # -- Per-session chat history --------------------------------------------------
@@ -81,6 +82,11 @@ def diagnose(request: DiagnosisRequest) -> DiagnosisResponse:
     # -- Parse response --------------------------------------------------------
     try:
         raw = _parse_llm_json(last_msg.content)
+
+        # Merge TF-IDF predictions for structured fields (not requested from LLM)
+        tfidf_fields = predict_diagnosis_fields(symptoms)
+        raw.update(tfidf_fields)
+
         diagnosis = DiagnosisResult(**raw)
         logger.debug(
             "[CANCER_SVC] Parsed | patient: %s | severity: %s | type: %s",
@@ -97,3 +103,5 @@ def diagnose(request: DiagnosisRequest) -> DiagnosisResponse:
         agent_id="CANCER-AGENT-1004",
         diagnosis=diagnosis,
     )
+
+

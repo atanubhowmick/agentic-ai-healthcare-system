@@ -35,7 +35,7 @@ A multi-agent AI system for clinical decision support, built with FastAPI and La
 | 3 | **Cancer Agent** | Oncology assessment - TNM staging, tumour markers, biopsy and imaging guidance | 8003 |
 | 4 | **Pathology Agent** | Analyses lab results and biomarker abnormalities | 8011 |
 | 5 | **Treatment Agent** | Generates comprehensive treatment and patient care plans | 8012 |
-| 6 | **Orchestrator Agent** | LangGraph master agent - triage, ChromaDB cache, retry loops, XAI gating | 8015 |
+| 6 | **Orchestrator Agent** | LangGraph master agent - classifier, ChromaDB cache, retry loops, XAI gating | 8015 |
 | 7 | **XAI Validation Service** | LLM-based clinical safety validation with rule-based checks and SHAP explainability | 8016 |
 | 8 | **Evaluation Service** | System monitoring and metrics calculation | 8017 |
 | 9 | **ChromaDB** | Externalized vector store - shared by all agents for RAG and semantic caching | 8020 |
@@ -557,7 +557,7 @@ agentic-ai-healthcare-system/
 │   │   ├── Dockerfile
 │   │   ├── requirements.txt
 │   │   └── src/
-│   │       ├── agents/             # triage_router.py - ClinicalBERT/BioBERT classifier
+│   │       ├── agents/             # classifier_router.py - ClinicalBERT/BioBERT classifier
 │   │       ├── api/                # FastAPI router (server.py)
 │   │       ├── core/               # config.py - service URLs, Chroma, Mongo env vars
 │   │       ├── exception/          # OrchestratorSvcException + handler

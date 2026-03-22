@@ -42,12 +42,12 @@ ORCHESTRATOR_AGENT_ID = "ORCH-AGENT-1000"
 MAX_RETRY_COUNT = int(os.getenv("MAX_RETRY_COUNT", "3"))
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "60.0"))
 
-# -- Triage router: BioBERT zero-shot candidate labels -----------------------
+# -- Classifier router: BioBERT zero-shot candidate labels -------------------
 # These are the specialists the orchestrator has agents for.
 # Used as zero-shot NLI hypothesis labels and as the valid routing targets.
-TRIAGE_SPECIALISTS: list[str] = ["cardiology", "neurology", "cancer", "pathology"]
+CLASSIFIER_SPECIALISTS: list[str] = ["cardiology", "neurology", "cancer", "pathology"]
 
-# -- Triage router thresholds -------------------------------------------------
+# -- Classifier router thresholds ---------------------------------------------
 RULE_DOMINANCE_RATIO          = float(os.getenv("RULE_DOMINANCE_RATIO",          "0.80"))
 RULE_MIN_KEYWORD_HITS         = int(os.getenv("RULE_MIN_KEYWORD_HITS",           "4"))
 BIOBERT_CONFIDENCE_THRESHOLD  = float(os.getenv("BIOBERT_CONFIDENCE_THRESHOLD",  "0.80"))
@@ -60,7 +60,7 @@ CLINICALBERT_MODEL_DIR = os.getenv("CLINICALBERT_MODEL_DIR", "./clinicalbert_rou
 
 # -- ClinicalBERT label map ---------------------------------------------------
 # Single source of truth for the specialist/domain classification labels.
-# Shared by the training scripts and the runtime classifier in triage_router.py.
+# Shared by the training scripts and the runtime classifier in classifier_router.py.
 # New domains without keyword rules will be excluded from the active training set
 # automatically (see train_clinicalbert_classifier.py) but are declared here so
 # they are ready once training data becomes available.

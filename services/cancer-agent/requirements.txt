@@ -28,5 +28,12 @@ pyarrow>=23.0.0
 google-cloud-bigquery>=3.29.0
 google-cloud-bigquery-storage>=2.28.0
 
+# MongoDB (used by evaluation dataset extraction script)
+pymongo>=4.10.0
+
+# TF-IDF classifier (structured diagnosis fields)
+scikit-learn>=1.6.0
+scipy>=1.13.0
+
 # Utilities
 python-dotenv>=1.2.0

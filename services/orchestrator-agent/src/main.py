@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from api.server import router
 from exception.exception_handler import register_exception_handlers
-from agents.triage_router import warm_up_models
+from agents.classifier_router import warm_up_models
 
 
 @asynccontextmanager

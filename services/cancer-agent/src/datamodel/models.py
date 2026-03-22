@@ -13,8 +13,10 @@ class DiagnosisResult(BaseModel):
     suspectedCancerType: str        # e.g. "Lung Adenocarcinoma", "Breast Cancer (HER2+)", "Unknown"
     stage: str                      # TNM staging if determinable, otherwise "Undetermined"
     severity: str                   # LOW / HIGH / CRITICAL
+    severityConfidence: int = 50    # 0-100 (0=very uncertain, 100=very certain)
     hospitalizationNeeded: str      # YES / NO
     emergencyCareNeeded: str        # YES / NO
+    emergencyCareConfidence: int = 50  # 0-100 (0=definitely not needed, 100=definitely needed)
     clarificationQuestion: str      # Clarification needed from patient, within 100 words
     biomarkersRequired: List[str]   # Tumor markers / genetic tests (PSA, CA-125, CEA, BRCA1/2, etc.)
     imagingRequired: List[str]      # CT, PET-CT, MRI, bone scan, etc.

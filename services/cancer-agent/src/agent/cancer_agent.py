@@ -25,11 +25,7 @@ from log.logger import logger
 _JSON_SCHEMA = """
 {
     "diagnosisDetails": "Detailed oncology assessment within 200 words",
-    "suspectedCancerType": "Suspected cancer type e.g. Lung Adenocarcinoma / Breast Cancer HER2+ / Colorectal Cancer / Unknown",
     "stage": "TNM staging if determinable e.g. Stage II (T2N1M0) or Undetermined",
-    "severity": "LOW/HIGH/CRITICAL",
-    "hospitalizationNeeded": "YES/NO",
-    "emergencyCareNeeded": "YES/NO",
     "clarificationQuestion": "Any clarification question within 100 words",
     "biomarkersRequired": ["Tumor markers and genetic tests e.g. CEA, CA-125, BRCA1/2, EGFR mutation"],
     "imagingRequired": ["Imaging studies e.g. CT chest/abdomen/pelvis, PET-CT, MRI brain, Bone scan"],
@@ -47,6 +43,8 @@ BASE_SYSTEM = (
     "When assessing a new patient query, use the search_mimic_cases tool to retrieve "
     "semantically similar historical oncology cases from the MIMIC-IV database and use them "
     "as evidence-based reference to improve diagnostic accuracy. "
+    "NOTE: severity, suspectedCancerType, hospitalizationNeeded and emergencyCareNeeded "
+    "are determined separately — do NOT include them in your response. "
     "Provide the final response strictly in the following JSON format:" + _JSON_SCHEMA
 )
 
