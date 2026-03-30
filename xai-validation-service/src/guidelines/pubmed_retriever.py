@@ -99,14 +99,14 @@ def _search_pmids(query: str, max_results: int) -> list[str]:
         resp.raise_for_status()
         data = resp.json()
         pmids = data.get("esearchresult", {}).get("idlist", [])
-        logger.info("[PUBMED] esearch ✓ | PMIDs found: %d | %s", len(pmids), pmids)
+        logger.info("[PUBMED] esearch | SUCCESS | PMIDs found: %d | %s", len(pmids), pmids)
         return pmids
     except Exception as exc:
-        logger.warning("[PUBMED] esearch ✗ | query: '%s' | error: %s", query[:60], exc)
+        logger.warning("[PUBMED] esearch | FAILED | query: '%s' | error: %s", query[:60], exc)
         return []
 
 
-def _fetch_abstracts(pmids: list[str]) -> list[dict]:
+def _retrieve_abstracts(pmids: list[str]) -> list[dict]:
     """
     Run efetch to get abstracts for a list of PMIDs.
     Returns list of dicts: {pmid, title, abstract}
@@ -124,10 +124,10 @@ def _fetch_abstracts(pmids: list[str]) -> list[dict]:
         resp = requests.get(_EFETCH_URL, params=params, timeout=_REQUEST_TIMEOUT)
         resp.raise_for_status()
         articles = _parse_efetch_xml(resp.text)
-        logger.info("[PUBMED] efetch ✓ | abstracts parsed: %d", len(articles))
+        logger.info("[PUBMED] efetch | SUCCESS | abstracts parsed: %d", len(articles))
         return articles
     except Exception as exc:
-        logger.warning("[PUBMED] efetch ✗ | PMIDs: %s | error: %s", pmids, exc)
+        logger.warning("[PUBMED] efetch | FAILED | PMIDs: %s | error: %s", pmids, exc)
         return []
 
 
@@ -164,7 +164,7 @@ def _parse_efetch_xml(xml_text: str) -> list[dict]:
 # Public interface
 # ---------------------------------------------------------------------------
 
-def fetch_guidelines() -> list[dict]:
+def retrieve_guidelines() -> list[dict]:
     """
     Fetch clinical guideline abstracts from PubMed for all configured queries.
 
@@ -189,7 +189,7 @@ def fetch_guidelines() -> list[dict]:
 
         # efetch call
         time.sleep(_REQUEST_INTERVAL)
-        articles = _fetch_abstracts(pmids)
+        articles = _retrieve_abstracts(pmids)
         total_requests += 1
 
         for art in articles:

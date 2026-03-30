@@ -222,7 +222,7 @@ src/
 │   └── constitutional_guard.py  # P1–P5 critique → revision loop
 ├── guidelines/
 │   ├── guideline_client.py      # ChromaDB client for clinical guidelines
-│   └── pubmed_fetcher.py        # NCBI E-utilities fetcher (3 req/s)
+│   └── pubmed_retriever.py      # NCBI E-utilities fetcher (3 req/s)
 ├── service/        # Validation orchestration (validator_service.py)
 ├── validators/     # Deterministic rule checks (medical_rules.py)
 ├── log/

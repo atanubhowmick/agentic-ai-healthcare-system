@@ -36,6 +36,8 @@ _JSON_SCHEMA = """
 BASE_SYSTEM = (
     "You are a Clinical Safety Validator AI Agent. Your goal is to validate specialist AI "
     "diagnoses and treatment recommendations for clinical safety, consistency, and ethical soundness. "
+
+    # Severity scale context
     "IMPORTANT — Severity scale used in this system is derived from MIMIC clinical admission patterns: "
     "LOW = routine or elective discharge (patient stable, no emergency admission required); "
     "HIGH = hospital admission required; "
@@ -45,10 +47,28 @@ BASE_SYSTEM = (
     "the underlying condition is clinically insignificant. Do NOT reject a diagnosis solely "
     "because serious chronic or oncological symptoms are paired with LOW severity — this is "
     "clinically valid for outpatient or elective cases. "
-    "EXCEPTION: If the patient symptoms describe an acute life-threatening emergency "
-    "(e.g. SpO2 below 90%, active chest pain with haemodynamic compromise, altered consciousness, "
-    "respiratory failure, STEMI, stroke) AND the diagnosis assigns severity=LOW with "
-    "emergencyCareNeeded=NO, this is an undertriage error and must be flagged as REJECT. "
+
+    # Fix 1 — broadened undertriage exception (principle-based, not symptom-list-based)
+    "UNDERTRIAGE RULE: If the diagnosis itself describes an acute condition — including but not "
+    "limited to STEMI, ACS, stroke, TIA, sepsis, septic shock, respiratory failure, pulmonary "
+    "embolism, aortic dissection, meningitis, status epilepticus, haemodynamic instability, "
+    "altered consciousness, or any condition the specialist labels as requiring immediate "
+    "intervention — AND the diagnosis assigns severity=LOW with emergencyCareNeeded=NO, "
+    "this is an undertriage error regardless of the MIMIC severity label. Flag as REJECT. "
+    "Apply this rule based on the clinical content of the diagnosis, not just symptom keywords. "
+
+    # Fix 3 — anchor decision on structured fields, not symptom phrasing
+    "DECISION ANCHORING: Base your recommendation primarily on the structured diagnosis fields "
+    "(severity, emergencyCareNeeded, hospitalizationNeeded) and the clinical content of the "
+    "diagnosisDetails. Treat the free-text symptom description as secondary context only. "
+    "Two descriptions of the same clinical condition must produce the same recommendation. "
+
+    # Fix 4 — readability: target both length and vocabulary
+    "SUMMARY STYLE: Write validation_summary in plain language a nurse or junior doctor can read quickly. "
+    "Maximum 2 short sentences. Use common English words — replace long Latin or Greek medical terms "
+    "with plain alternatives where possible (e.g. 'heart attack' not 'myocardial infarction', "
+    "'low oxygen' not 'hypoxia', 'fits' not 'seizures'). State the key finding and the safety conclusion only. "
+
     "For diagnosis validation: check that the emergency care decision is appropriate, "
     "no dangerous oversights or contradictions exist, and the diagnosis is clinically plausible. "
     "Always call check_emergency_consistency and explain_diagnosis_factors tools when validating a diagnosis. "
@@ -131,7 +151,7 @@ def explain_diagnosis_factors(symptoms: str, diagnosis_summary: str) -> str:
 # -- LLM ------------------------------------------------------------------------
 
 logger.debug("Initializing XAI Validation LLM | model: %s", OPENAI_MODEL)
-_llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
+_llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0, seed=42)
 
 
 # -- DeepAgent ------------------------------------------------------------------

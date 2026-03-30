@@ -124,7 +124,7 @@ _REVISION_SYSTEM = (
 # LLM instance (same model as the agent for consistency)
 # ---------------------------------------------------------------------------
 
-_llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
+_llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0, seed=42)
 
 
 # ---------------------------------------------------------------------------
@@ -133,25 +133,33 @@ _llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
 
 def _needs_critique(raw_response: str, severity: str, emergency_care: str) -> bool:
     """
-    Fast pre-filter: skip the LLM critique call when there are no structural red flags.
-    Only trigger critique when a P1-level risk is detectable from the response structure
-    (CRITICAL severity or APPROVE recommendation) to avoid unnecessary LLM calls on
-    routine LOW-severity cases.
+    Fast pre-filter: only run the LLM critique when a structural violation is detectable.
+
+    Triggers on:
+      - Malformed JSON (critique may surface the issue)
+      - CRITICAL severity (P1 violation candidate)
+      - CRITICAL + emergencyCareNeeded!=YES + APPROVE (definite P1 violation)
+      - confidence_score >= 0.95 (tightened from 0.9 to reduce false triggers on HIGH cases)
+
+    Skips critique for all routine LOW and HIGH severity APPROVE/REVIEW/REJECT cases
+    where none of the above structural signals are present.
     """
     try:
         parsed = json.loads(raw_response)
     except json.JSONDecodeError:
-        return True  # malformed JSON — let critique handle it
+        return True
     recommendation = parsed.get("recommendation", "")
     confidence = parsed.get("confidence_score", 0.0)
     sev_upper = severity.upper()
-    # Always critique if: CRITICAL severity, high confidence on an uncertain case,
-    # or APPROVE with CRITICAL+NO-emergency (P1 violation candidate)
+
+    # P1 candidate: CRITICAL severity always warrants review
     if sev_upper == "CRITICAL":
         return True
+    # Definite P1 violation: CRITICAL approved without emergency care
     if recommendation == "APPROVE" and sev_upper == "CRITICAL" and emergency_care.upper() != "YES":
         return True
-    if isinstance(confidence, (int, float)) and confidence >= 0.9:
+    # P2 candidate: only trigger at 0.95+ to avoid false positives on confident HIGH cases
+    if isinstance(confidence, (int, float)) and confidence >= 0.95:
         return True
     return False
 

@@ -132,21 +132,25 @@ def _compute_text_metrics(result: dict) -> dict:
 # Payload helpers
 # ---------------------------------------------------------------------------
 
-def _build_diagnosis_details(symptoms: str, severity: str, emergency_care: str) -> str:
+def _build_diagnosis_details(symptoms: str, severity: str, emergency_care: str, diagnoses_text: str = "") -> str:
     """
-    Construct a minimal but realistic diagnosisDetails string so the XAI LLM
-    receives clinical context rather than a raw dict fallback.
+    Construct a diagnosis details string for the XAI validator.
+    Includes the actual MIMIC diagnoses text when available so the validator
+    can identify acute conditions (STEMI, sepsis, etc.) and apply the undertriage rule.
     """
     em_text = (
         "Emergency care is indicated"
         if emergency_care.upper() == "YES"
         else "No emergency care required"
     )
-    return (
+    base = (
         f"Patient presented with: {symptoms}. "
-        f"Clinical assessment indicates {severity.lower()} severity oncological concern. "
+        f"Specialist assessment: {severity.lower()} severity. "
         f"{em_text} based on current clinical indicators."
     )
+    if diagnoses_text and diagnoses_text.strip() and diagnoses_text.strip() != symptoms.strip():
+        base += f" Recorded diagnoses: {diagnoses_text.strip()}."
+    return base
 
 
 def _paraphrase_symptoms(symptoms: str) -> str:
@@ -171,6 +175,7 @@ def _call_xai(
     severity: str,
     emergency_care: str,
     hospitalization_needed: str,
+    diagnoses_text: str = "",
     timeout: float = 30.0,
 ) -> dict[str, Any] | None:
     """
@@ -182,7 +187,7 @@ def _call_xai(
         "symptoms": symptoms,
         "specialist_agent": "Cancer_Oncology_Specialist",
         "diagnosis": {
-            "diagnosisDetails": _build_diagnosis_details(symptoms, severity, emergency_care),
+            "diagnosisDetails": _build_diagnosis_details(symptoms, severity, emergency_care, diagnoses_text),
             "severity": severity,
             "emergencyCareNeeded": emergency_care,
             "hospitalizationNeeded": hospitalization_needed,
@@ -314,10 +319,10 @@ class XaiEvaluator:
             "run_at":                      datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "total_cases_loaded":          len(cases),
             "elapsed_seconds":             elapsed,
-            "option_1_decision_accuracy":  opt1_results["opt1"],
-            "option_6_over_rejection_rate": opt1_results["opt6"],
-            "option_2_safety_net_effectiveness": opt2_results,
-            "option_4_rule_engine_coverage": opt4_results,
+            "decision_accuracy":         opt1_results["opt1"],
+            "over_rejection_rate":        opt1_results["opt6"],
+            "safety_net_effectiveness":   opt2_results,
+            "rule_engine_coverage":       opt4_results,
             "xai_sparsity":               opt1_results["sparsity"],
             "xai_interpretability":       opt1_results["interpretability"],
             "xai_stability":              stability_results,
@@ -425,10 +430,12 @@ class XaiEvaluator:
         detected = missed = skipped = called = 0
 
         for i, row in enumerate(severe_cases):
-            symptoms   = str(row.get("chief_complaint", "") or row.get("diagnoses_text", ""))
+            chief     = str(row.get("chief_complaint", "") or "")
+            diag_text = str(row.get("diagnoses_text", "") or "")
+            symptoms  = chief or diag_text
             patient_id = f"eval_undertriage_{row.get('subject_id', i)}"
 
-            result = _call_xai(patient_id, symptoms, "LOW", "NO", "NO")
+            result = _call_xai(patient_id, symptoms, "LOW", "NO", "NO", diagnoses_text=diag_text)
             if result is None:
                 skipped += 1
                 continue
