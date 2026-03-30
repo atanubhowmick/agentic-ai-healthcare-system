@@ -24,6 +24,16 @@ class ValidationResult(BaseModel):
     key_concerns: List[str]
     recommendation: str             # "APPROVE" | "REJECT" | "REVIEW"
 
+    # Explainability — populated by SHAP or LLM fallback
+    explanation_factors: List[dict] = []
+
+    # Validation metadata
+    validator_latency_ms: float = 0.0
+    model_used: str = ""
+    explainability_method: str = ""  # "SHAP" | "LLM_FALLBACK" | ""
+    rules_triggered: List[str] = []
+    constitutional_revised: bool = False
+
 
 class ValidationResponse(BaseModel):
     agent: str

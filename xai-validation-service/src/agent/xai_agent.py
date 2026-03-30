@@ -18,6 +18,7 @@ from deepagents import create_deep_agent
 
 from core.config import OPENAI_MODEL
 from explainers.shap_provider import DiagnosisExplainer
+from explainers import context as explanation_context
 from log.logger import logger
 
 
@@ -35,8 +36,21 @@ _JSON_SCHEMA = """
 BASE_SYSTEM = (
     "You are a Clinical Safety Validator AI Agent. Your goal is to validate specialist AI "
     "diagnoses and treatment recommendations for clinical safety, consistency, and ethical soundness. "
-    "For diagnosis validation: check that severity matches symptoms, emergency care decision is "
-    "appropriate, no dangerous oversights or contradictions exist, and the diagnosis is clinically plausible. "
+    "IMPORTANT — Severity scale used in this system is derived from MIMIC clinical admission patterns: "
+    "LOW = routine or elective discharge (patient stable, no emergency admission required); "
+    "HIGH = hospital admission required; "
+    "CRITICAL = ICU or emergency intervention required. "
+    "This applies to ALL specialist diagnoses (cardiology, neurology, oncology, pathology). "
+    "LOW severity means the condition does not require emergency admission — it does NOT mean "
+    "the underlying condition is clinically insignificant. Do NOT reject a diagnosis solely "
+    "because serious chronic or oncological symptoms are paired with LOW severity — this is "
+    "clinically valid for outpatient or elective cases. "
+    "EXCEPTION: If the patient symptoms describe an acute life-threatening emergency "
+    "(e.g. SpO2 below 90%, active chest pain with haemodynamic compromise, altered consciousness, "
+    "respiratory failure, STEMI, stroke) AND the diagnosis assigns severity=LOW with "
+    "emergencyCareNeeded=NO, this is an undertriage error and must be flagged as REJECT. "
+    "For diagnosis validation: check that the emergency care decision is appropriate, "
+    "no dangerous oversights or contradictions exist, and the diagnosis is clinically plausible. "
     "Always call check_emergency_consistency and explain_diagnosis_factors tools when validating a diagnosis. "
     "For treatment validation: check the treatment is proportional to the diagnosis, medications are safe, "
     "urgency matches severity, and the plan is evidence-based. "
@@ -98,9 +112,14 @@ def explain_diagnosis_factors(symptoms: str, diagnosis_summary: str) -> str:
         symptoms: Patient symptoms or clinical presentation text.
         diagnosis_summary: Summary of the specialist diagnosis.
     """
-    factors = DiagnosisExplainer().explain_diagnosis(symptoms, diagnosis_summary)
+    explainer = DiagnosisExplainer()
+    factors = explainer.explain_diagnosis(symptoms, diagnosis_summary)
     if not factors:
+        explanation_context.set_factors([])
+        explanation_context.set_method("LLM_FALLBACK")
         return "No explainability factors could be determined."
+    explanation_context.set_factors(factors)
+    explanation_context.set_method(explainer.last_method)
     lines = [
         f"{i}. {f.get('factor', 'Unknown')} | importance: {f.get('importance', 0):.2f} | {f.get('direction', 'neutral')}"
         for i, f in enumerate(factors, start=1)

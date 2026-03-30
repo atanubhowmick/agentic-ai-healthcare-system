@@ -8,6 +8,15 @@ class TfidfBaselineRequest(BaseModel):
     test_size: float = 0.20            # fraction of data reserved for testing (e.g. 0.25 for 75:25)
 
 
+class XaiEvaluationRequest(BaseModel):
+    max_cases: int = 0                 # 0 = use all available cases; capped per option internally
+    max_correct_cases: int = 150       # max cases for Option 1/6 (HTTP calls)
+    max_undertriage_cases: int = 50    # max severe cases for Option 2 (HTTP calls)
+    max_stability_cases: int = 30      # cases tested 3× for Stability
+    max_fidelity_cases: int = 30       # cases tested 2× for Fidelity
+    max_consistency_cases: int = 30    # cases tested 2× for Consistency
+
+
 class EvaluationStatusResponse(BaseModel):
     running: bool
     report_available: bool

@@ -538,11 +538,55 @@ class TfidfBaselineEvaluator:
         clf = _make_svm()
         clf.fit(X_tr_feat, y_tr)
         y_pred  = clf.predict(X_te_feat)
-        correct = sum(1 for p, t in zip(y_pred, y_te) if p == t)
+
+        labels = sorted(set(y_f))
+
+        try:
+            from sklearn.metrics import roc_auc_score
+            y_proba = clf.predict_proba(X_te_feat)
+            roc_auc_ovr_weighted = round(
+                roc_auc_score(y_te, y_proba, multi_class="ovr",
+                              average="weighted", labels=labels), 4,
+            )
+            roc_auc_ovr_macro = round(
+                roc_auc_score(y_te, y_proba, multi_class="ovr",
+                              average="macro", labels=labels), 4,
+            )
+        except Exception:
+            roc_auc_ovr_weighted = None
+            roc_auc_ovr_macro    = None
+
+        f1_w   = round(f1_score(y_te, y_pred, labels=labels, average="weighted", zero_division=0), 4)
+        f1_m   = round(f1_score(y_te, y_pred, labels=labels, average="macro",    zero_division=0), 4)
+        acc    = round(accuracy_score(y_te, y_pred), 4)
+
+        pc_raw = classification_report(
+            y_te, y_pred, labels=labels, zero_division=0, output_dict=True,
+        )
+        per_class = {
+            k: {
+                "precision": round(v["precision"], 4),
+                "recall":    round(v["recall"],    4),
+                "f1_score":  round(v["f1-score"],  4),
+                "support":   int(v["support"]),
+            }
+            for k, v in pc_raw.items() if k in labels
+        }
+
+        cm = confusion_matrix(y_te, y_pred, labels=labels).tolist()
 
         return {
-            "n":              len(y_te),
-            "train_n":        len(y_tr),
-            "match_accuracy": round(correct / len(y_te), 4),
-            "rare_dropped":   dropped,
+            "n":                     len(y_te),
+            "train_n":               len(y_tr),
+            "match_accuracy":        round(accuracy_score(y_te, y_pred), 4),
+            "f1_weighted":           f1_w,
+            "f1_macro":              f1_m,
+            "roc_auc_ovr_weighted":  roc_auc_ovr_weighted,
+            "roc_auc_ovr_macro":     roc_auc_ovr_macro,
+            "rare_dropped":          dropped,
+            "per_class":             per_class,
+            "confusion_matrix":      {
+                "labels": labels,
+                "matrix": cm,
+            },
         }

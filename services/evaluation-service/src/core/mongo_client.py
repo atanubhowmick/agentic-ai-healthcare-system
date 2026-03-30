@@ -12,7 +12,8 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 
 from core.config import (
-    MONGO_DB, MONGO_EVAL_COLLECTION, MONGO_TFIDF_REPORT_COLLECTION, MONGO_URI,
+    MONGO_DB, MONGO_EVAL_COLLECTION, MONGO_TFIDF_REPORT_COLLECTION,
+    MONGO_XAI_REPORT_COLLECTION, MONGO_URI,
 )
 from log.logger import logger
 
@@ -127,3 +128,30 @@ def load_latest_tfidf_report() -> Optional[dict]:
 def has_tfidf_report() -> bool:
     """Return True if at least one TF-IDF baseline report exists."""
     return _get_collection(MONGO_TFIDF_REPORT_COLLECTION).count_documents({}, limit=1) > 0
+
+
+# ---------------------------------------------------------------------------
+# XAI evaluation reports — write / read
+# ---------------------------------------------------------------------------
+
+def save_xai_report(report: dict) -> None:
+    """Insert an XAI evaluation report with a UTC timestamp."""
+    col = _get_collection(MONGO_XAI_REPORT_COLLECTION)
+    col.create_index([("run_at", pymongo.DESCENDING)], background=True)
+    doc = {"run_at": datetime.datetime.utcnow(), **report}
+    col.insert_one(doc)
+    logger.info("[MONGO] XAI evaluation report saved to '%s'", MONGO_XAI_REPORT_COLLECTION)
+
+
+def load_latest_xai_report() -> Optional[dict]:
+    """Return the most recent XAI evaluation report, or None."""
+    col = _get_collection(MONGO_XAI_REPORT_COLLECTION)
+    doc = col.find_one({}, {"_id": 0}, sort=[("run_at", pymongo.DESCENDING)])
+    if doc and isinstance(doc.get("run_at"), datetime.datetime):
+        doc["run_at"] = doc["run_at"].isoformat() + "Z"
+    return doc
+
+
+def has_xai_report() -> bool:
+    """Return True if at least one XAI evaluation report exists."""
+    return _get_collection(MONGO_XAI_REPORT_COLLECTION).count_documents({}, limit=1) > 0

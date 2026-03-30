@@ -24,5 +24,11 @@ scikit-learn>=1.5.0
 shap>=0.46.0
 matplotlib>=3.9.0
 
+# ChromaDB (clinical guidelines RAG)
+chromadb>=0.5.0
+langchain-chroma>=0.1.0
+
 # Utilities
 python-dotenv>=1.2.0
+scipy>=1.13.0
+requests>=2.32.0
