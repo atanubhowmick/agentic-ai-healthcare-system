@@ -1,9 +1,9 @@
 """
-Standalone script to fine-tune the ClinicalBERT triage classifier.
+Standalone script to fine-tune the ClinicalBERT specialist classifier.
 
 Run this OUTSIDE the application - no running service required.
 Both CSV files are external (not committed to git) and must be provided via
---triage-csv and/or --disease-csv. At least one must be supplied.
+--classifier-csv and/or --disease-csv. At least one must be supplied.
 
 The trained model is saved to --output-dir. Point the orchestrator service at
 it via the CLINICALBERT_MODEL_DIR env var (default: ./clinicalbert_router).
@@ -12,20 +12,20 @@ Usage examples
 --------------
 # Both CSVs (recommended - 6000+ balanced examples)
 python services/orchestrator-agent/src/training/train_clinicalbert_classifier.py \\
-    --triage-csv  /data/triage_training_data.csv \\
+    --classifier-csv  /data/classifier_training_data.csv \\
     --disease-csv "/data/Disease and symptoms dataset.csv"
 
 # Disease CSV only
 python services/orchestrator-agent/src/training/train_clinicalbert_classifier.py \\
     --disease-csv "/data/Disease and symptoms dataset.csv"
 
-# Triage CSV only (small dataset, useful for quick smoke-test)
+# Classifier CSV only (small dataset, useful for quick smoke-test)
 python services/orchestrator-agent/src/training/train_clinicalbert_classifier.py \\
-    --triage-csv /data/triage_training_data.csv
+    --classifier-csv /data/classifier_training_data.csv
 
 # Full control
 python services/orchestrator-agent/src/training/train_clinicalbert_classifier.py \\
-    --triage-csv    /data/triage_training_data.csv \\
+    --classifier-csv    /data/classifier_training_data.csv \\
     --disease-csv   "/data/Disease and symptoms dataset.csv" \\
     --output-dir    services/orchestrator-agent/clinicalbert_router \\
     --max-per-label 2000 \\
@@ -66,7 +66,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-log = logging.getLogger("train_triage")
+log = logging.getLogger("train_classifier")
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -321,7 +321,7 @@ def load_disease_csv(
 # PyTorch Dataset
 # ---------------------------------------------------------------------------
 
-class _TriageDataset(Dataset):
+class _ClassifierDataset(Dataset):
     def __init__(
         self,
         samples: list[tuple[str, str]],
@@ -367,7 +367,7 @@ def _compute_metrics(eval_pred) -> dict:
 # ---------------------------------------------------------------------------
 
 def train_and_save(
-    triage_csv: str,
+    classifier_csv: str,
     output_dir: str,
     disease_csv: str = "",
     max_per_label: int = 1500,
@@ -376,7 +376,7 @@ def train_and_save(
     lr: float = 2e-5,
     val_split: float = 0.15,
 ) -> None:
-    synthetic_data   = load_synthetic_data(triage_csv)
+    synthetic_data   = load_synthetic_data(classifier_csv)
     disease_data  = load_disease_csv(disease_csv, max_per_label=max_per_label)
     all_data      = synthetic_data + disease_data
 
@@ -425,8 +425,8 @@ def train_and_save(
         label2id=active_label2id,
     )
 
-    train_dataset = _TriageDataset(train_samples, tokenizer, active_label2id)
-    val_dataset   = _TriageDataset(val_samples,   tokenizer, active_label2id)
+    train_dataset = _ClassifierDataset(train_samples, tokenizer, active_label2id)
+    val_dataset   = _ClassifierDataset(val_samples,   tokenizer, active_label2id)
 
     training_args = TrainingArguments(
         output_dir=output_dir,
@@ -484,13 +484,13 @@ def _default_output_dir() -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Fine-tune ClinicalBERT triage classifier (standalone, no service required)",
+        description="Fine-tune ClinicalBERT specialist classifier (standalone, no service required)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--triage-csv",
+        "--classifier-csv",
         default="",
-        help="Path to triage_training_data.csv (synthetic examples). External - not in git.",
+        help="Path to classifier_training_data.csv (synthetic examples). External - not in git.",
     )
     parser.add_argument(
         "--disease-csv",
@@ -510,11 +510,11 @@ def main() -> None:
     parser.add_argument("--val-split",     type=float, default=0.15)
     args = parser.parse_args()
 
-    if not args.triage_csv and not args.disease_csv:
-        parser.error("At least one of --triage-csv or --disease-csv must be provided.")
+    if not args.classifier_csv and not args.disease_csv:
+        parser.error("At least one of --classifier-csv or --disease-csv must be provided.")
 
     train_and_save(
-        triage_csv    = args.triage_csv,
+        classifier_csv = args.classifier_csv,
         output_dir    = args.output_dir,
         disease_csv   = args.disease_csv,
         max_per_label = args.max_per_label,

@@ -20,7 +20,7 @@ class AgentState(TypedDict):
     chroma_cache_hit: bool              # True when a matching treatment was found in ChromaDB
     chroma_cached_result: dict | None   # The cached treatment payload returned from ChromaDB
 
-    # -- Triage ---------------------------------------------------------------
+    # -- Classifier -----------------------------------------------------------
     assigned_specialist: str        # "cardiology" | "neurology" | "pathology" | "cancer" | "unknown"
     secondary_check_needed: bool    # True when lab cross-check is warranted
     secondary_check_done: bool      # Prevents re-running secondary on retry loops

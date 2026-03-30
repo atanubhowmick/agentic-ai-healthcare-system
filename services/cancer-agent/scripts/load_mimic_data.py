@@ -129,6 +129,8 @@ def _build_document_text(triage_complaint: str, chief_complaint: str, hpi: str) 
 
 
 # -- BigQuery source -----------------------------------------------------------
+# Remove the line - from below query
+# AND MOD(CAST(d.subject_id AS INT64), 5) != 0
 
 BIGQUERY_SQL = """
 SELECT
@@ -154,6 +156,7 @@ WHERE
     d.icd_version = 10
     AND REGEXP_CONTAINS(d.icd_code, r'^C|^D[0-4][0-9]')
     AND (t.chiefcomplaint IS NOT NULL OR n.text IS NOT NULL)
+    AND MOD(CAST(d.subject_id AS INT64), 5) != 0
 GROUP BY d.subject_id, d.hadm_id
 LIMIT {limit}
 """

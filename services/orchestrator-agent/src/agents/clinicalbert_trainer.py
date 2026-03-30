@@ -2,7 +2,7 @@
 ClinicalBERT fine-tuning logic.
 
 Training data is injected via the `training_data` parameter.
-Use the standalone train_triage_classifier.py at the project root to train.
+Use the standalone train_clinicalbert_classifier.py at the project root to train.
 """
 
 import numpy as np
@@ -26,7 +26,7 @@ _MAX_LENGTH  = 128
 _RANDOM_SEED = 42
 
 
-class _TriageDataset(Dataset):
+class _ClassifierDataset(Dataset):
     def __init__(self, samples: list[tuple[str, str]], tokenizer: AutoTokenizer) -> None:
         self.samples   = samples
         self.tokenizer = tokenizer
@@ -89,8 +89,8 @@ def train_and_save(
         label2id=LABEL2ID,
     )
 
-    train_dataset = _TriageDataset(train_samples, tokenizer)
-    val_dataset   = _TriageDataset(val_samples,   tokenizer)
+    train_dataset = _ClassifierDataset(train_samples, tokenizer)
+    val_dataset   = _ClassifierDataset(val_samples,   tokenizer)
 
     training_args = TrainingArguments(
         output_dir=output_dir,

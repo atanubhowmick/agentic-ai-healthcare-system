@@ -6,6 +6,12 @@ load_dotenv()
 # -- OpenAI model --------------------------------------------------------------
 OPENAI_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-5.2")
 
+# -- MongoDB (MIMIC evaluation cases — shared with evaluation-service) --------
+import os as _os
+MONGO_URI             = _os.getenv("MONGO_URI",             "mongodb://127.0.0.1:27017")
+MONGO_DB              = _os.getenv("MONGO_DB",              "agentic_ai_healthcare_db")
+MONGO_EVAL_COLLECTION = _os.getenv("MONGO_EVAL_COLLECTION", "mimic_evaluation_cases")
+
 # -- ChromaDB (external HTTP server, shared with orchestrator) ----------------
 CHROMA_HOST = os.getenv("CHROMA_HOST", "127.0.0.1")
 CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8020"))

@@ -15,3 +15,5 @@ async def diagnose_cancer_condition(request: DiagnosisRequest) -> GenericRespons
     diagnosis_response = diagnose(request)
     logger.debug("Returning diagnosis for patient %s", request.patient_id)
     return GenericResponse.success(diagnosis_response)
+
+
