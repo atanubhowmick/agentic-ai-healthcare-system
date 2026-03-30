@@ -59,6 +59,7 @@ Each service has its own detailed README covering API endpoints, implementation 
 | Orchestrator Agent | [ORCHESTRATOR_AGENT_README.md](services/orchestrator-agent/ORCHESTRATOR_AGENT_README.md) |
 | XAI Validation Service | [XAI_VALIDATION_SERVICE_README.md](xai-validation-service/XAI_VALIDATION_SERVICE_README.md) |
 | Evaluation Service | [EVALUATION_SERVICE_README.md](services/evaluation-service/EVALUATION_SERVICE_README.md) |
+| Patient UI | [PATIENT_UI_README.md](patient-ui/PATIENT_UI_README.md) |
 
 ---
 
@@ -87,72 +88,6 @@ All services return a consistent error envelope on failure.
 | `VALIDATION_LLM_ERROR` | The XAI validator LLM call failed |
 | `VALIDATION_PARSE_ERROR` | The XAI validator response could not be parsed |
 | `INTERNAL_SERVER_ERROR` | Unhandled internal error |
-
----
-
-## Patient UI
-
-A Streamlit web application that provides a patient-facing interface to the Agentic AI Healthcare System.
-
-### Pages
-
-| Page | File | Description |
-|------|------|-------------|
-| **Patient Check-in** | `pages/1_patient_login.py` | Entry point - captures Patient ID and Full Name before proceeding |
-| **Diagnosis** | `pages/2_diagnosis.py` | Symptom input form; calls the Orchestrator and renders the full structured report |
-
-### UI Flow
-
-```
-Patient Check-in (Patient ID + Name)
-        │
-        ▼
-Diagnosis Page - symptom text area (max 2 000 chars)
-        │  POST /orchestrator/diagnose
-        ▼
-Diagnosis Report card
-  ├── Status badge (COMPLETED / HUMAN_REVIEW_REQUIRED)
-  ├── Severity + Emergency / Hospitalisation flags
-  ├── Diagnosis Summary + Full Details (expandable)
-  ├── Treatment Recommendations (expandable)
-  ├── XAI Diagnosis Validation (expandable)
-  ├── XAI Treatment Validation (expandable)
-  └── Audit Trail (expandable)
-```
-
-### Components
-
-| Component | File | Description |
-|-----------|------|-------------|
-| `render_banner()` | `components/banner.py` | Blue top-bar with app title; optionally displays patient name and ID |
-| `render_footer()` | `components/banner.py` | Clinical disclaimer footer |
-
-### Running the UI locally
-
-```bash
-cd patient-ui
-
-# Create and activate virtual environment
-python -m venv venv
-source venv/Scripts/activate   # Windows Git Bash
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start the app (port 8021)
-bash run.sh
-
-# Or with Streamlit directly
-streamlit run app.py --server.port 8021 --server.address 127.0.0.1
-```
-
-Open `http://localhost:8021` in your browser.
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ORCHESTRATOR_URL` | `http://127.0.0.1:8015` | Base URL of the Orchestrator Agent |
 
 ---
 
@@ -209,7 +144,7 @@ Set `CHROMA_DATA_PATH` before running Docker Compose so that the container bind-
 
 ```bash
 # Git Bash
-export CHROMA_DATA_PATH="E:/Atanu/Python/LJMU_MS/Database/chroma_data"
+export CHROMA_DATA_PATH="Path_to_Chroma_DB/chroma_data"
 docker-compose up --build
 ```
 
@@ -217,14 +152,49 @@ The `docker-compose.yml` maps this path into the ChromaDB container at `/chroma/
 
 ---
 
+## MongoDB - Persistent Storage
+
+MongoDB stores all completed patient cases and evaluation reports. It runs as a standalone container with data persisted to a host directory via `MONGO_DB_PATH`.
+
+### Running MongoDB locally (without Docker)
+
+```bash
+# Start MongoDB on the default port
+mongod --dbpath "$MONGO_DB_PATH" --port 27017 --quiet
+```
+
+Verify it is running:
+```bash
+mongosh --eval "db.adminCommand('ping')"
+```
+
+### MongoDB collections
+
+| Collection | Used By | Purpose |
+|------------|---------|---------|
+| `mimic_cases` | Cancer Agent, Evaluation Service | MIMIC-IV patient records for TF-IDF training and evaluation |
+| `evaluation_reports` | Evaluation Service | Persisted XAI evaluation run results |
+
+### Reusing locally stored data with Docker
+
+Set `MONGO_DB_PATH` before running Docker Compose so that the container bind-mounts your existing data directory:
+
+```bash
+# Git Bash
+export MONGO_DB_PATH="$MONGO_DB_PATH"
+docker-compose up --build
+```
+
+The `docker-compose.yml` maps this path into the MongoDB container at `/data/db`, so all previously loaded data is immediately available — no reload required.
+
+---
+
 ## Running with Docker Compose
 
 ```bash
-# Git Bash - with a custom ChromaDB data path (recommended)
+# Git Bash - set both data paths before starting (required)
 export CHROMA_DATA_PATH="Path_to_Chroma_DB/chroma_data"
-docker-compose up --build
-
-# Default (stores chroma_data in the project directory)
+export MONGO_DB_PATH="Path_to_Mongo_DB/mongo_data"
 docker-compose up --build
 ```
 
