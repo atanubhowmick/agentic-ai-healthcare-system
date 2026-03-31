@@ -14,7 +14,7 @@ from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 
 from core.config import CHROMA_HOST, CHROMA_PORT
-from guidelines.pubmed_fetcher import fetch_guidelines
+from guidelines.pubmed_retriever import retrieve_guidelines
 from log.logger import logger
 
 _guidelines_collection = None
@@ -97,7 +97,7 @@ def seed_guidelines() -> None:
             guidelines: list[dict] = []
             try:
                 logger.info("[GUIDELINES] Fetching clinical guidelines from PubMed...")
-                guidelines = fetch_guidelines()
+                guidelines = retrieve_guidelines()
             except Exception as exc:
                 logger.warning("[GUIDELINES] PubMed fetch failed: %s — skipping seed.", exc)
 
