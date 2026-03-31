@@ -112,6 +112,7 @@ def _make_tfidf(n: int) -> TfidfVectorizer:
     return TfidfVectorizer(
         sublinear_tf=True, ngram_range=(1, 2),
         min_df=1 if n < 200 else 2, max_df=0.95, max_features=30_000,
+        stop_words="english",
     )
 
 
@@ -127,6 +128,7 @@ def _make_complaint_tfidf(n: int) -> TfidfVectorizer:
     return TfidfVectorizer(
         sublinear_tf=True, ngram_range=(1, 2),
         min_df=1 if n < 200 else 2, max_df=0.95, max_features=5_000,
+        stop_words="english",
     )
 
 
