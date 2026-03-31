@@ -2,13 +2,16 @@
 XAI Validator Service - orchestrates validation via the DeepAgent.
 
 Validation flow:
-  1. Run deterministic rule checks (fast pre-filter, no LLM required).
-  2. Pre-execute explainability tool directly — guaranteed execution, results
+  1. Deterministic rule pre-filter (medical_rules.py) — hard keyword/severity checks.
+  2. Rule Engine (rules/rule_engine.py) — 46 hardcoded + LLM-generated rules from MongoDB.
+       REJECT → immediate rejection, no LLM call.
+       REVIEW → concern injected into LLM query, LLM still runs.
+  3. Pre-execute explainability tool directly — guaranteed execution, results
      stored in ContextVar for collection after agent call.
-  3. Build the patient query string with pre-computed tool results injected.
-  4. Invoke the DeepAgent for final reasoning (single LLM call, no tool-call overhead).
-  5. Apply constitutional guard (critique + optional revision, with guideline RAG).
-  6. Parse JSON, attach SHAP factors and validation metadata, return response.
+  4. Build the patient query string with pre-computed tool results and rule concerns injected.
+  5. Invoke the DeepAgent for final reasoning (single LLM call).
+  6. Apply constitutional guard (critique + optional revision, with guideline RAG).
+  7. Parse JSON, attach SHAP factors and validation metadata, return response.
 """
 
 import json
@@ -21,6 +24,7 @@ from datamodel.models import (
     ValidationResult, ValidationResponse, GenericResponse,
 )
 from validators.medical_rules import check_emergency_consistency, check_severity_validity
+from rules.rule_engine import evaluate as rule_evaluate
 from explainers.shap_provider import DiagnosisExplainer
 from explainers import context as explanation_context
 from guardrails import constitutional_guard
@@ -97,7 +101,7 @@ def run_diagnosis_validation(request: DiagnosisValidationRequest) -> GenericResp
     emergency = diagnosis.get("emergencyCareNeeded", "UNKNOWN")
     rules_triggered: list[str] = []
 
-    # Step 1: Deterministic rule pre-filter
+    # Step 1: Deterministic rule pre-filter (medical_rules.py)
     rule_ok, rule_msg = check_emergency_consistency(request.symptoms, severity, emergency)
     if not rule_ok:
         rules_triggered.append("check_emergency_consistency")
@@ -111,7 +115,31 @@ def run_diagnosis_validation(request: DiagnosisValidationRequest) -> GenericResp
         str(diagnosis)
     )
 
-    # Step 2: Pre-execute explainability — guaranteed before LLM reasoning
+    # Step 2: Rule Engine (46 hardcoded + LLM-generated rules from MongoDB)
+    rule_passed, rule_action, rule_reason, triggered_ids = rule_evaluate(
+        symptoms=request.symptoms,
+        severity=severity,
+        emergency_care=emergency,
+        diagnosis_text=diagnosis_summary,
+        treatment_text="",
+    )
+    review_warning: str | None = None
+    if not rule_passed:
+        rules_triggered.extend(triggered_ids)
+        if rule_action == "REJECT":
+            logger.warning(
+                "[XAI_SVC] Rule engine REJECT | patient: %s | rules: %s",
+                request.patient_id, triggered_ids,
+            )
+            return _make_rejection(request.patient_id, "DIAGNOSIS", rule_reason, rules_triggered)
+        # REVIEW: flag concern but continue to LLM
+        review_warning = f"Rule {triggered_ids[0] if triggered_ids else 'unknown'}: {rule_reason}"
+        logger.info(
+            "[XAI_SVC] Rule engine REVIEW | patient: %s | %s",
+            request.patient_id, review_warning,
+        )
+
+    # Step 3: Pre-execute explainability — guaranteed before LLM reasoning
     explanation_context.clear()
     factors: list[dict] = []
     explainability_method = ""
@@ -128,7 +156,7 @@ def run_diagnosis_validation(request: DiagnosisValidationRequest) -> GenericResp
     except Exception as exc:
         logger.warning("[XAI_SVC] Explainability pre-computation failed: %s", exc)
 
-    # Step 3: Build query with pre-computed results injected
+    # Step 4: Build query with pre-computed results and rule concerns injected
     query = (
         f"Validate the following specialist diagnosis for patient {request.patient_id}.\n"
         f"Specialist Agent: {request.specialist_agent}\n"
@@ -138,11 +166,15 @@ def run_diagnosis_validation(request: DiagnosisValidationRequest) -> GenericResp
         f"Emergency Care Needed: {emergency}\n"
         f"Hospitalization Needed: {diagnosis.get('hospitalizationNeeded', 'UNKNOWN')}\n"
         f"Rule Check: PASSED — emergency consistency verified.\n"
+    )
+    if review_warning:
+        query += f"⚠ Rule Engine Safety Concern: {review_warning}\n"
+    query += (
         f"Explainability Factors (pre-computed):\n{_format_factors_for_prompt(factors)}\n"
         "Respond strictly in the requested JSON format."
     )
 
-    # Step 4: Invoke agent for final reasoning
+    # Step 5: Invoke agent for final reasoning
     t_start = time.perf_counter()
     try:
         content = _invoke_agent(query)
@@ -157,7 +189,7 @@ def run_diagnosis_validation(request: DiagnosisValidationRequest) -> GenericResp
         )
     latency_ms = (time.perf_counter() - t_start) * 1000
 
-    # Step 5: Constitutional guard (includes guideline RAG for P5)
+    # Step 6: Constitutional guard (includes guideline RAG for P5)
     content, critique = constitutional_guard.apply(
         raw_response=content,
         symptoms=request.symptoms,
@@ -167,7 +199,7 @@ def run_diagnosis_validation(request: DiagnosisValidationRequest) -> GenericResp
     if critique:
         logger.info("[XAI_SVC] Constitutional guard revised response | patient: %s", request.patient_id)
 
-    # Step 6: Parse, attach metadata, return
+    # Step 7: Parse, attach metadata, return
     try:
         raw = _parse_llm_json(content)
         if critique:
@@ -211,13 +243,36 @@ def run_treatment_validation(request: TreatmentValidationRequest) -> GenericResp
 
     rules_triggered: list[str] = []
 
-    # Step 1: Deterministic rule pre-filter
+    # Step 1: Deterministic rule pre-filter (medical_rules.py)
     sev_ok, sev_msg = check_severity_validity(request.severity)
     if not sev_ok:
         rules_triggered.append("check_severity_validity")
         return _make_rejection(request.patient_id, "TREATMENT", sev_msg, rules_triggered)
 
-    # Step 2: Build query
+    # Step 2: Rule Engine — treatment safety and medication safety rules
+    rule_passed, rule_action, rule_reason, triggered_ids = rule_evaluate(
+        symptoms=request.diagnosis_summary,
+        severity=request.severity,
+        emergency_care="NO",  # treatment requests don't carry emergency_care field
+        diagnosis_text=request.diagnosis_summary,
+        treatment_text=request.treatment_recommendation,
+    )
+    review_warning: str | None = None
+    if not rule_passed:
+        rules_triggered.extend(triggered_ids)
+        if rule_action == "REJECT":
+            logger.warning(
+                "[XAI_SVC] Rule engine REJECT (treatment) | patient: %s | rules: %s",
+                request.patient_id, triggered_ids,
+            )
+            return _make_rejection(request.patient_id, "TREATMENT", rule_reason, rules_triggered)
+        review_warning = f"Rule {triggered_ids[0] if triggered_ids else 'unknown'}: {rule_reason}"
+        logger.info(
+            "[XAI_SVC] Rule engine REVIEW (treatment) | patient: %s | %s",
+            request.patient_id, review_warning,
+        )
+
+    # Step 3: Build query
     query = (
         f"Validate the following treatment recommendation for patient {request.patient_id}.\n"
         f"Specialist Agent: {request.specialist_agent}\n"
@@ -225,10 +280,12 @@ def run_treatment_validation(request: TreatmentValidationRequest) -> GenericResp
         f"Severity: {request.severity}\n"
         f"Treatment Recommendation: {request.treatment_recommendation}\n"
         f"Rule Check: PASSED — severity validity verified.\n"
-        "Respond strictly in the requested JSON format."
     )
+    if review_warning:
+        query += f"⚠ Rule Engine Safety Concern: {review_warning}\n"
+    query += "Respond strictly in the requested JSON format."
 
-    # Step 3: Invoke agent
+    # Step 4: Invoke agent
     t_start = time.perf_counter()
     try:
         content = _invoke_agent(query)
@@ -243,7 +300,7 @@ def run_treatment_validation(request: TreatmentValidationRequest) -> GenericResp
         )
     latency_ms = (time.perf_counter() - t_start) * 1000
 
-    # Step 4: Parse, attach metadata, return
+    # Step 5: Parse, attach metadata, return
     try:
         raw = _parse_llm_json(content)
         result = ValidationResult(

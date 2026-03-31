@@ -39,37 +39,108 @@ from log.logger import logger
 
 
 # ---------------------------------------------------------------------------
+# MIMIC abbreviation expander
+# ---------------------------------------------------------------------------
+
+_MIMIC_ABBREV: dict[str, str] = {
+    # Cardiac
+    "stemi":   "st elevation myocardial infarction",
+    "nstemi":  "non-st elevation myocardial infarction",
+    "mi":      "myocardial infarction",
+    "acs":     "acute coronary syndrome",
+    "chf":     "congestive heart failure",
+    "af":      "atrial fibrillation",
+    "afib":    "atrial fibrillation",
+    "vt":      "ventricular tachycardia",
+    "vf":      "ventricular fibrillation",
+    # Neurological
+    "cva":     "cerebrovascular accident stroke",
+    "tia":     "transient ischemic attack",
+    "sah":     "subarachnoid hemorrhage",
+    "sdh":     "subdural hematoma",
+    "ich":     "intracranial hemorrhage",
+    "loc":     "loss of consciousness",
+    "ams":     "altered mental status",
+    "ms":      "mental status",
+    # Respiratory
+    "sob":     "shortness of breath",
+    "doe":     "dyspnea on exertion",
+    "ards":    "acute respiratory distress syndrome",
+    "copd":    "chronic obstructive pulmonary disease",
+    "pe":      "pulmonary embolism",
+    "dvt":     "deep vein thrombosis",
+    # Infection / sepsis
+    "sirs":    "systemic inflammatory response syndrome",
+    # Haemorrhage / GI
+    "gib":     "gastrointestinal bleed",
+    "ugib":    "upper gastrointestinal bleed",
+    "lgib":    "lower gastrointestinal bleed",
+    # Renal
+    "aki":     "acute kidney injury",
+    "arf":     "acute renal failure",
+    "ckd":     "chronic kidney disease",
+    # Symptoms
+    "cp":      "chest pain",
+    "n/v":     "nausea vomiting",
+    "ha":      "headache",
+    "htn":     "hypertension",
+    "dm":      "diabetes mellitus",
+    "etoh":    "alcohol intoxication",
+}
+
+
+def _expand_abbreviations(text: str) -> str:
+    """
+    Expand MIMIC clinical abbreviations to full terms.
+    Word-boundary aware — replaces whole tokens only.
+    """
+    tokens = re.split(r"(\s+|[,;/])", text)
+    expanded = []
+    for token in tokens:
+        clean = token.strip().lower().rstrip(".,:")
+        expanded.append(_MIMIC_ABBREV.get(clean, token))
+    return " ".join(expanded)
+
+
+# ---------------------------------------------------------------------------
 # Rule replication (mirrors xai-validation-service/src/validators/medical_rules.py)
+# Checks BOTH symptoms and diagnosis_text so MIMIC ICD descriptions are included.
 # ---------------------------------------------------------------------------
 
 _CRITICAL_SYMPTOM_KEYWORDS = [
-    # Full phrases (natural language)
-    "cardiac arrest", "heart attack", "myocardial infarction", "stroke",
-    "aneurysm", "sepsis", "septic shock", "pulmonary embolism",
-    "respiratory failure", "loss of consciousness", "unresponsive",
-    "unconscious", "not breathing",
-    # MIMIC clinical abbreviations
-    "mi", "stemi", "nstemi", "cva", "tia", "pe ", "ards",
-    "septic", "cardiac arrest",
+    "cardiac arrest", "heart attack", "myocardial infarction", "stemi", "nstemi",
+    "acs", "acute coronary syndrome", "ventricular fibrillation",
+    "stroke", "cva", "cerebrovascular accident", "ischemic stroke", "haemorrhagic stroke",
+    "subarachnoid haemorrhage", "subarachnoid hemorrhage", "sah",
+    "sepsis", "septic shock", "severe sepsis",
+    "pulmonary embolism", "respiratory failure", "ards",
+    "loss of consciousness", "unresponsive", "unconscious",
+    "aortic dissection", "cardiac tamponade", "status epilepticus",
+    "haemodynamic instability", "hemodynamic instability",
+    "meningococcal", "bacterial meningitis", "eclampsia",
 ]
 
 _EMERGENCY_SYMPTOM_KEYWORDS = [
-    # Full phrases (natural language)
-    "chest pain", "difficulty breathing", "shortness of breath",
-    "severe headache", "sudden weakness", "confusion", "severe bleeding",
-    "high fever", "seizure", "paralysis", "severe chest",
-    # MIMIC clinical abbreviations
-    "cp ", "sob", "doe", "dyspnea", "syncope", "altered mental",
-    "ams", "altered ms", "hypotension", "hypoxia", "hemorrhage",
-    "bleeding", "fall", "chest tightness",
+    "chest pain", "chest tightness", "crushing chest", "chest pressure",
+    "difficulty breathing", "shortness of breath", "dyspnea", "severe dyspnoea",
+    "severe headache", "thunderclap headache",
+    "sudden weakness", "facial droop", "confusion", "altered consciousness",
+    "severe bleeding", "active haemorrhage", "active hemorrhage",
+    "high fever", "seizure", "convulsion", "paralysis",
+    "syncope", "near syncope", "sudden collapse",
+    "hypotension", "hypoxia",
 ]
 
 
-def _rule_triggered(symptoms: str, severity: str, emergency_care: str) -> bool:
-    """Return True if the deterministic rule engine would flag this combination."""
-    s = symptoms.lower()
-    has_critical = any(kw in s for kw in _CRITICAL_SYMPTOM_KEYWORDS)
-    has_emergency = any(kw in s for kw in _EMERGENCY_SYMPTOM_KEYWORDS)
+def _rule_triggered(symptoms: str, severity: str, emergency_care: str,
+                    diagnosis_text: str = "") -> bool:
+    """
+    Return True if the deterministic rule engine would flag this combination.
+    Checks both symptoms and diagnosis_text to catch MIMIC ICD descriptions.
+    """
+    combined = f"{symptoms} {diagnosis_text}".lower()
+    has_critical  = any(kw in combined for kw in _CRITICAL_SYMPTOM_KEYWORDS)
+    has_emergency = any(kw in combined for kw in _EMERGENCY_SYMPTOM_KEYWORDS)
     em = emergency_care.upper()
     sv = severity.upper()
     if has_critical and em != "YES":
@@ -132,11 +203,17 @@ def _compute_text_metrics(result: dict) -> dict:
 # Payload helpers
 # ---------------------------------------------------------------------------
 
-def _build_diagnosis_details(symptoms: str, severity: str, emergency_care: str, diagnoses_text: str = "") -> str:
+def _build_diagnosis_details(
+    symptoms: str,
+    severity: str,
+    emergency_care: str,
+    diagnoses_text: str = "",
+    admission_type: str = "",
+) -> str:
     """
     Construct a diagnosis details string for the XAI validator.
-    Includes the actual MIMIC diagnoses text when available so the validator
-    can identify acute conditions (STEMI, sepsis, etc.) and apply the undertriage rule.
+    Includes the MIMIC diagnoses text and admission type so the validator
+    can identify acute conditions and apply the undertriage rule correctly.
     """
     em_text = (
         "Emergency care is indicated"
@@ -150,6 +227,8 @@ def _build_diagnosis_details(symptoms: str, severity: str, emergency_care: str, 
     )
     if diagnoses_text and diagnoses_text.strip() and diagnoses_text.strip() != symptoms.strip():
         base += f" Recorded diagnoses: {diagnoses_text.strip()}."
+    if admission_type and admission_type.strip():
+        base += f" Original admission type: {admission_type.strip()}."
     return base
 
 
@@ -176,6 +255,7 @@ def _call_xai(
     emergency_care: str,
     hospitalization_needed: str,
     diagnoses_text: str = "",
+    admission_type: str = "",
     timeout: float = 30.0,
 ) -> dict[str, Any] | None:
     """
@@ -187,7 +267,9 @@ def _call_xai(
         "symptoms": symptoms,
         "specialist_agent": "Cancer_Oncology_Specialist",
         "diagnosis": {
-            "diagnosisDetails": _build_diagnosis_details(symptoms, severity, emergency_care, diagnoses_text),
+            "diagnosisDetails": _build_diagnosis_details(
+                symptoms, severity, emergency_care, diagnoses_text, admission_type
+            ),
             "severity": severity,
             "emergencyCareNeeded": emergency_care,
             "hospitalizationNeeded": hospitalization_needed,
@@ -430,12 +512,19 @@ class XaiEvaluator:
         detected = missed = skipped = called = 0
 
         for i, row in enumerate(severe_cases):
-            chief     = str(row.get("chief_complaint", "") or "")
-            diag_text = str(row.get("diagnoses_text", "") or "")
-            symptoms  = chief or diag_text
-            patient_id = f"eval_undertriage_{row.get('subject_id', i)}"
+            chief          = str(row.get("chief_complaint", "") or "")
+            diag_text      = str(row.get("diagnoses_text", "") or "")
+            admission_type = str(row.get("admission_type", "") or "")
+            # Combine chief complaint + ICD diagnoses text so rule engine
+            # sees both. Expand MIMIC abbreviations in the chief complaint.
+            chief_expanded = _expand_abbreviations(chief) if chief else ""
+            symptoms       = " ".join(filter(None, [chief_expanded, diag_text]))
+            patient_id     = f"eval_undertriage_{row.get('subject_id', i)}"
 
-            result = _call_xai(patient_id, symptoms, "LOW", "NO", "NO", diagnoses_text=diag_text)
+            result = _call_xai(
+                patient_id, symptoms, "LOW", "NO", "NO",
+                diagnoses_text=diag_text, admission_type=admission_type,
+            )
             if result is None:
                 skipped += 1
                 continue
@@ -488,14 +577,16 @@ class XaiEvaluator:
                 skipped += 1
                 continue
 
-            symptoms = str(row.get("chief_complaint", "") or row.get("diagnoses_text", ""))
-            s_lower  = symptoms.lower()
-            total   += 1
+            chief     = str(row.get("chief_complaint", "") or "")
+            diag_text = str(row.get("diagnoses_text", "") or "")
+            symptoms  = _expand_abbreviations(chief) if chief else diag_text
+            combined  = f"{symptoms} {diag_text}".lower()
+            total    += 1
 
-            has_critical  = any(kw in s_lower for kw in _CRITICAL_SYMPTOM_KEYWORDS)
-            has_emergency = any(kw in s_lower for kw in _EMERGENCY_SYMPTOM_KEYWORDS)
+            has_critical  = any(kw in combined for kw in _CRITICAL_SYMPTOM_KEYWORDS)
+            has_emergency = any(kw in combined for kw in _EMERGENCY_SYMPTOM_KEYWORDS)
 
-            if _rule_triggered(symptoms, severity, emergency):
+            if _rule_triggered(symptoms, severity, emergency, diagnosis_text=diag_text):
                 rule_hit += 1
             else:
                 rule_miss += 1

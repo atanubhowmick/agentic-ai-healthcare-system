@@ -56,6 +56,9 @@ BASE_SYSTEM = (
     "intervention — AND the diagnosis assigns severity=LOW with emergencyCareNeeded=NO, "
     "this is an undertriage error regardless of the MIMIC severity label. Flag as REJECT. "
     "Apply this rule based on the clinical content of the diagnosis, not just symptom keywords. "
+    "ADDITIONAL SIGNAL: If the diagnosisDetails states 'Original admission type: EMERGENCY', "
+    "this means the patient was admitted as an emergency. A severity=LOW with emergencyCareNeeded=NO "
+    "assignment for an emergency admission is a strong undertriage signal — flag as REJECT or REVIEW. "
 
     # Fix 3 — anchor decision on structured fields, not symptom phrasing
     "DECISION ANCHORING: Base your recommendation primarily on the structured diagnosis fields "
@@ -68,6 +71,13 @@ BASE_SYSTEM = (
     "Maximum 2 short sentences. Use common English words — replace long Latin or Greek medical terms "
     "with plain alternatives where possible (e.g. 'heart attack' not 'myocardial infarction', "
     "'low oxygen' not 'hypoxia', 'fits' not 'seizures'). State the key finding and the safety conclusion only. "
+
+    # Sparsity — ensure key_concerns is always populated
+    "KEY CONCERNS: Always populate key_concerns with 1–2 specific clinical observations. "
+    "For APPROVE: state what was checked and found safe (e.g. 'Emergency care correctly flagged', "
+    "'Severity consistent with outpatient oncology presentation'). "
+    "For REJECT or REVIEW: state the specific clinical concern. "
+    "Never leave key_concerns empty. "
 
     "For diagnosis validation: check that the emergency care decision is appropriate, "
     "no dangerous oversights or contradictions exist, and the diagnosis is clinically plausible. "

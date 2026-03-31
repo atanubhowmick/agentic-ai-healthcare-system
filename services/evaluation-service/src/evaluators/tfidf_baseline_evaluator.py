@@ -80,6 +80,7 @@ def _make_tfidf(train_size: int) -> TfidfVectorizer:
         max_df       = 0.95,
         max_features = 30_000,
         analyzer     = "word",
+        stop_words   = "english",
     )
 
 
@@ -115,6 +116,7 @@ def _make_complaint_tfidf(train_size: int) -> TfidfVectorizer:
         max_df       = 0.95,
         max_features = 5_000,
         analyzer     = "word",
+        stop_words   = "english",
     )
 
 
