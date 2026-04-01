@@ -241,7 +241,7 @@ def _build_collage_c(payload: dict, run_dir: str) -> None:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def generate_xai_report_graphs(output_dir: str = XAI_AGGREGATE_REPORT_PLOTS_DIR) -> None:
+def generate_xai_aggregate_report_graphs(output_dir: str = XAI_AGGREGATE_REPORT_PLOTS_DIR) -> None:
     """
     Load the latest XAI evaluation report from MongoDB and produce three
     high-resolution collage PNGs saved in a timestamped subfolder of *output_dir*.
@@ -285,4 +285,4 @@ if __name__ == "__main__":
         help=f"Root directory for output (default: {XAI_AGGREGATE_REPORT_PLOTS_DIR}, override with XAI_AGGREGATE_REPORT_PLOTS_DIR env var)",
     )
     args = parser.parse_args()
-    generate_xai_report_graphs(output_dir=args.output_dir)
+    generate_xai_aggregate_report_graphs(output_dir=args.output_dir)

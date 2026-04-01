@@ -7,7 +7,8 @@ from core.mongo_client import (
 from evaluators.tfidf_baseline_evaluator import TfidfBaselineEvaluator
 from evaluators.xai_evaluator import XaiEvaluator
 from exception.exceptions import EvaluationSvcException
-from graph.xai_aggregate_report_graph_gnerator import generate_xai_report_graphs
+from graph.xai_aggregate_report_graph_gnerator import generate_xai_aggregate_report_graphs
+from graph.xai_statistical_report_graph_gnerator import generate_xai_statistical_report_graphs
 from log.logger import logger
 
 _tfidf_lock    = threading.Lock()
@@ -143,9 +144,13 @@ def _run_xai_evaluation(
         evaluator.run_evaluation()
         logger.info("[XAI SERVICE] Evaluation complete.")
         try:
-            generate_xai_report_graphs()
+            generate_xai_aggregate_report_graphs()
         except Exception as graph_exc:
-            logger.warning("[XAI SERVICE] Graph generation failed: %s", graph_exc)
+            logger.warning("[XAI SERVICE] Aggregate graph generation failed: %s", graph_exc)
+        try:
+            generate_xai_statistical_report_graphs()
+        except Exception as stat_exc:
+            logger.warning("[XAI SERVICE] Statistical graph generation failed: %s", stat_exc)
     except Exception as exc:
         logger.error("[XAI SERVICE] Evaluation failed: %s", exc)
     finally:

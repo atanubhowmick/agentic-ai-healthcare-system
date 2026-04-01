@@ -422,6 +422,11 @@ class XaiEvaluator:
         elapsed = round(time.time() - started, 1)
         logger.info("[XAI_EVAL] Done in %.1f s", elapsed)
 
+        per_case_decisions = (
+            opt1_results.get("per_case_rows", []) +
+            opt2_results.get("per_case_rows", [])
+        )
+
         report = {
             "run_at":                      datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "total_cases_loaded":          len(cases),
@@ -435,6 +440,7 @@ class XaiEvaluator:
             "xai_stability":              stability_results,
             "xai_fidelity":               fidelity_results,
             "xai_consistency":            consistency_results,
+            "per_case_decisions":         per_case_decisions,
         }
         save_xai_report(report)
         logger.info("[XAI_EVAL] Report saved.")
@@ -447,6 +453,7 @@ class XaiEvaluator:
 
         approved = over_rejected = skipped = keyword_excluded = called = 0
         text_metrics_list: list[dict] = []
+        per_case_rows: list[dict] = []
 
         for i, row in enumerate(cases):
             severity  = _label_severity(row)
@@ -474,6 +481,17 @@ class XaiEvaluator:
                 approved += 1
             else:
                 over_rejected += 1
+
+            # Per-case row for confusion matrix / ROC / PR curve
+            conf = float(result.get("confidence_score") or 0.5)
+            # risk_score: probability the case is unsafe — invert confidence for APPROVE
+            risk_score = round(1.0 - conf if recommendation == "APPROVE" else conf, 4)
+            per_case_rows.append({
+                "true_label":        "safe",
+                "validator_decision": recommendation,
+                "confidence_score":  conf,
+                "risk_score":        risk_score,
+            })
 
             # Collect text metrics for Sparsity + Interpretability (free, no extra calls)
             text_metrics_list.append(_compute_text_metrics(result))
@@ -518,7 +536,8 @@ class XaiEvaluator:
             "skipped":                          skipped,
         }
 
-        return {"opt1": opt1, "opt6": opt6, "sparsity": sparsity, "interpretability": interpretability}
+        return {"opt1": opt1, "opt6": opt6, "sparsity": sparsity, "interpretability": interpretability,
+                "per_case_rows": per_case_rows}
 
     # ------------------------------------------------------------------
     # Option 2
@@ -539,6 +558,7 @@ class XaiEvaluator:
         logger.info("[XAI_EVAL] Under-triage: %d severe cases selected", len(severe_cases))
 
         detected = missed = skipped = called = 0
+        per_case_rows: list[dict] = []
 
         for i, row in enumerate(severe_cases):
             chief          = str(row.get("chief_complaint", "") or "")
@@ -565,10 +585,22 @@ class XaiEvaluator:
                 continue
             called += 1
 
-            if result.get("recommendation", "").upper() in ("REJECT", "REVIEW"):
+            recommendation = result.get("recommendation", "").upper()
+            if recommendation in ("REJECT", "REVIEW"):
                 detected += 1
             else:
                 missed += 1
+
+            # Per-case row for confusion matrix / ROC / PR curve
+            conf = float(result.get("confidence_score") or 0.5)
+            # risk_score: unsafe cases flagged as REJECT/REVIEW → keep confidence; missed → invert
+            risk_score = round(conf if recommendation in ("REJECT", "REVIEW") else 1.0 - conf, 4)
+            per_case_rows.append({
+                "true_label":         "unsafe",
+                "validator_decision":  recommendation,
+                "confidence_score":   conf,
+                "risk_score":         risk_score,
+            })
 
             if (i + 1) % 20 == 0:
                 logger.info("[XAI_EVAL] Under-triage progress: %d/%d called", called, i + 1)
@@ -589,6 +621,7 @@ class XaiEvaluator:
             "sensitivity":              sensitivity,
             "miss_rate":                miss_rate,
             "skipped":                  skipped,
+            "per_case_rows":            per_case_rows,
             "note": (
                 "CRITICAL/HIGH case with EMERGENCY/DIRECT EMER. admission and non-empty symptoms, "
                 "reported as severity=LOW, emergencyCareNeeded=NO. "
