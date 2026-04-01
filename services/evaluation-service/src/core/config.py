@@ -12,3 +12,6 @@ MONGO_XAI_REPORT_COLLECTION   = os.getenv("MONGO_XAI_REPORT_COLLECTION",   "xai_
 
 # -- External services ---------------------------------------------------------
 XAI_SERVICE_URL = os.getenv("XAI_SERVICE_URL", "http://localhost:8016")
+
+# -- Report output -------------------------------------------------------------
+XAI_AGGREGATE_REPORT_PLOTS_DIR = os.getenv("XAI_AGGREGATE_REPORT_PLOTS_DIR", "aggregate_report_plots")

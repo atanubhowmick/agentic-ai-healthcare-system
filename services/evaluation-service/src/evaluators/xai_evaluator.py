@@ -207,13 +207,16 @@ def _build_diagnosis_details(
     symptoms: str,
     severity: str,
     emergency_care: str,
-    diagnoses_text: str = "",
+    document: str = "",
     admission_type: str = "",
+    triage_o2sat: float | None = None,
+    triage_sbp: float | None = None,
+    triage_acuity: int | None = None,
 ) -> str:
     """
     Construct a diagnosis details string for the XAI validator.
-    Includes the MIMIC diagnoses text and admission type so the validator
-    can identify acute conditions and apply the undertriage rule correctly.
+    Includes the MIMIC clinical document, admission type, and triage vitals
+    so the validator can identify acute conditions and apply undertriage rules.
     """
     em_text = (
         "Emergency care is indicated"
@@ -225,10 +228,21 @@ def _build_diagnosis_details(
         f"Specialist assessment: {severity.lower()} severity. "
         f"{em_text} based on current clinical indicators."
     )
-    if diagnoses_text and diagnoses_text.strip() and diagnoses_text.strip() != symptoms.strip():
-        base += f" Recorded diagnoses: {diagnoses_text.strip()}."
+    if document and document.strip() and document.strip() != symptoms.strip():
+        # Include first 400 chars of the clinical document for context
+        base += f" Clinical notes: {document.strip()[:400]}."
     if admission_type and admission_type.strip():
         base += f" Original admission type: {admission_type.strip()}."
+    # Triage vitals — critical undertriage signals
+    vitals = []
+    if triage_o2sat is not None and triage_o2sat < 95:
+        vitals.append(f"SpO2 {triage_o2sat}%")
+    if triage_sbp is not None and triage_sbp < 90:
+        vitals.append(f"SBP {triage_sbp} mmHg (hypotensive)")
+    if triage_acuity is not None and triage_acuity <= 2:
+        vitals.append(f"triage acuity level {triage_acuity} (immediate/emergent)")
+    if vitals:
+        base += f" Triage vitals: {', '.join(vitals)}."
     return base
 
 
@@ -254,8 +268,11 @@ def _call_xai(
     severity: str,
     emergency_care: str,
     hospitalization_needed: str,
-    diagnoses_text: str = "",
+    document: str = "",
     admission_type: str = "",
+    triage_o2sat: float | None = None,
+    triage_sbp: float | None = None,
+    triage_acuity: int | None = None,
     timeout: float = 30.0,
 ) -> dict[str, Any] | None:
     """
@@ -268,7 +285,9 @@ def _call_xai(
         "specialist_agent": "Cancer_Oncology_Specialist",
         "diagnosis": {
             "diagnosisDetails": _build_diagnosis_details(
-                symptoms, severity, emergency_care, diagnoses_text, admission_type
+                symptoms, severity, emergency_care,
+                document, admission_type,
+                triage_o2sat, triage_sbp, triage_acuity,
             ),
             "severity": severity,
             "emergencyCareNeeded": emergency_care,
@@ -302,6 +321,11 @@ def _label_emergency(row: dict) -> str | None:
 
 
 def _label_severity(row: dict) -> str | None:
+    # Use stored severity field if present (authoritative)
+    stored = str(row.get("severity", "")).upper()
+    if stored in ("LOW", "HIGH", "CRITICAL"):
+        return stored
+    # Fallback heuristic for older documents without severity field
     loc = str(row.get("discharge_location", "")).upper()
     has_icu = bool(row.get("has_icu_stay", False))
     if "DIED" in loc or "HOSPICE" in loc or has_icu:
@@ -338,7 +362,8 @@ def _safe_cases(cases: list[dict]) -> list[tuple[dict, str, str, str]]:
         emergency = _label_emergency(row)
         if severity is None or emergency is None:
             continue
-        symptoms = str(row.get("chief_complaint", "") or row.get("diagnoses_text", ""))
+        chief    = str(row.get("chief_complaint", "") or "")
+        symptoms = _expand_abbreviations(chief) if chief else ""
         if not _has_keywords(symptoms):
             out.append((row, symptoms, severity, emergency))
     return out
@@ -501,8 +526,12 @@ class XaiEvaluator:
     def _eval_undertriage(self, cases: list[dict]) -> dict:
         logger.info("[XAI_EVAL] Option 2: under-triage detection …")
 
+        _EMERGENCY_ADMISSIONS = {"EMERGENCY", "DIRECT EMER."}
         severe_cases = [
-            row for row in cases if _label_severity(row) in ("HIGH", "CRITICAL")
+            row for row in cases
+            if _label_severity(row) in ("HIGH", "CRITICAL")
+            and str(row.get("admission_type", "")).upper() in _EMERGENCY_ADMISSIONS
+            and (row.get("chief_complaint") or row.get("diagnoses_text"))
         ]
         if self.max_undertriage_cases and len(severe_cases) > self.max_undertriage_cases:
             severe_cases = severe_cases[:self.max_undertriage_cases]
@@ -513,17 +542,23 @@ class XaiEvaluator:
 
         for i, row in enumerate(severe_cases):
             chief          = str(row.get("chief_complaint", "") or "")
-            diag_text      = str(row.get("diagnoses_text", "") or "")
+            document       = str(row.get("document", "") or "")
             admission_type = str(row.get("admission_type", "") or "")
-            # Combine chief complaint + ICD diagnoses text so rule engine
-            # sees both. Expand MIMIC abbreviations in the chief complaint.
+            triage_o2sat   = row.get("triage_o2sat")
+            triage_sbp     = row.get("triage_sbp")
+            triage_acuity  = row.get("triage_acuity")
+            # Expand MIMIC abbreviations in the chief complaint
             chief_expanded = _expand_abbreviations(chief) if chief else ""
-            symptoms       = " ".join(filter(None, [chief_expanded, diag_text]))
+            symptoms       = chief_expanded or document[:200]
             patient_id     = f"eval_undertriage_{row.get('subject_id', i)}"
 
             result = _call_xai(
                 patient_id, symptoms, "LOW", "NO", "NO",
-                diagnoses_text=diag_text, admission_type=admission_type,
+                document=document,
+                admission_type=admission_type,
+                triage_o2sat=float(triage_o2sat) if triage_o2sat is not None else None,
+                triage_sbp=float(triage_sbp) if triage_sbp is not None else None,
+                triage_acuity=int(triage_acuity) if triage_acuity is not None else None,
             )
             if result is None:
                 skipped += 1
@@ -555,7 +590,8 @@ class XaiEvaluator:
             "miss_rate":                miss_rate,
             "skipped":                  skipped,
             "note": (
-                "CRITICAL/HIGH case reported as severity=LOW, emergencyCareNeeded=NO. "
+                "CRITICAL/HIGH case with EMERGENCY/DIRECT EMER. admission and non-empty symptoms, "
+                "reported as severity=LOW, emergencyCareNeeded=NO. "
                 "Sensitivity = fraction correctly rejected/reviewed."
             ),
         }
@@ -577,16 +613,16 @@ class XaiEvaluator:
                 skipped += 1
                 continue
 
-            chief     = str(row.get("chief_complaint", "") or "")
-            diag_text = str(row.get("diagnoses_text", "") or "")
-            symptoms  = _expand_abbreviations(chief) if chief else diag_text
-            combined  = f"{symptoms} {diag_text}".lower()
-            total    += 1
+            chief    = str(row.get("chief_complaint", "") or "")
+            document = str(row.get("document", "") or "")
+            symptoms = _expand_abbreviations(chief) if chief else document[:200]
+            combined = f"{symptoms} {document}".lower()
+            total   += 1
 
             has_critical  = any(kw in combined for kw in _CRITICAL_SYMPTOM_KEYWORDS)
             has_emergency = any(kw in combined for kw in _EMERGENCY_SYMPTOM_KEYWORDS)
 
-            if _rule_triggered(symptoms, severity, emergency, diagnosis_text=diag_text):
+            if _rule_triggered(symptoms, severity, emergency, diagnosis_text=document):
                 rule_hit += 1
             else:
                 rule_miss += 1
@@ -646,7 +682,7 @@ class XaiEvaluator:
 
         for idx, (row, symptoms, severity, emergency) in enumerate(safe):
             hospitalization = _label_hospitalization(severity) or "NO"
-            patient_id = f"stab_{row.get('subject_id', idx)}"
+            patient_id      = f"stab_{row.get('subject_id', idx)}"
 
             recommendations = []
             for r in range(REPEATS):
@@ -663,8 +699,9 @@ class XaiEvaluator:
                 stable += 1
             else:
                 unstable += 1
-                logger.debug(
-                    "[XAI_EVAL] Unstable case %s: %s", patient_id, recommendations
+                logger.info(
+                    "[XAI_EVAL] Unstable case %s: %s | symptoms: %.80s",
+                    patient_id, recommendations, symptoms,
                 )
 
             if (idx + 1) % 10 == 0:
