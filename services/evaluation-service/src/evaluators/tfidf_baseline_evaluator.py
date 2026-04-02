@@ -416,6 +416,16 @@ class TfidfBaselineEvaluator:
         ys = np.array(y_scores)
         yp = np.array(y_pred)
 
+        per_case_rows = [
+            {
+                "task":              label,
+                "true_label":        int(yt[i]),
+                "predicted_label":   int(yp[i]),
+                "score":             round(float(ys[i]), 4),
+            }
+            for i in range(len(yt))
+        ]
+
         try:
             base = AgentEvaluator.calculate_agent_metrics(yt, ys, yp)
             tn, fp, fn, tp = confusion_matrix(yt, yp).ravel()
@@ -437,6 +447,7 @@ class TfidfBaselineEvaluator:
                         "tn": int(tn), "fp": int(fp),
                         "fn": int(fn), "tp": int(tp),
                     },
+                    "per_case_rows":      per_case_rows,
                 }
             }
         except Exception as exc:

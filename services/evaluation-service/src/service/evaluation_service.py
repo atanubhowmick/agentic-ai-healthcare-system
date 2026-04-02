@@ -7,6 +7,8 @@ from core.mongo_client import (
 from evaluators.tfidf_baseline_evaluator import TfidfBaselineEvaluator
 from evaluators.xai_evaluator import XaiEvaluator
 from exception.exceptions import EvaluationSvcException
+from graph.cancer_agent_aggregate_report_graph_generator import generate_cancer_agent_aggregate_report_graphs
+from graph.cancer_agent_statistical_report_graph_generator import generate_cancer_agent_statistical_report_graphs
 from graph.xai_aggregate_report_graph_gnerator import generate_xai_aggregate_report_graphs
 from graph.xai_statistical_report_graph_gnerator import generate_xai_statistical_report_graphs
 from log.logger import logger
@@ -62,6 +64,14 @@ def _run_tfidf_evaluation(max_cases: int, test_size: float = 0.20) -> None:
         evaluator = TfidfBaselineEvaluator(test_size=test_size)
         evaluator.run_evaluation(max_cases=max_cases)
         logger.info("[TFIDF SERVICE] Evaluation complete.")
+        try:
+            generate_cancer_agent_aggregate_report_graphs()
+        except Exception as agg_exc:
+            logger.warning("[TFIDF SERVICE] Aggregate graph generation failed: %s", agg_exc)
+        try:
+            generate_cancer_agent_statistical_report_graphs()
+        except Exception as stat_exc:
+            logger.warning("[TFIDF SERVICE] Statistical graph generation failed: %s", stat_exc)
     except Exception as exc:
         logger.error("[TFIDF SERVICE] Evaluation failed: %s", exc)
     finally:

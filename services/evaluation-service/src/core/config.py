@@ -14,5 +14,9 @@ MONGO_XAI_REPORT_COLLECTION   = os.getenv("MONGO_XAI_REPORT_COLLECTION",   "xai_
 XAI_SERVICE_URL = os.getenv("XAI_SERVICE_URL", "http://localhost:8016")
 
 # -- Report output -------------------------------------------------------------
-XAI_AGGREGATE_REPORT_PLOTS_DIR = os.getenv("XAI_AGGREGATE_REPORT_PLOTS_DIR", "aggregate_report_plots")
-XAI_STATISTICAL_REPORT_PLOTS_DIR = os.getenv("XAI_STATISTICAL_REPORT_PLOTS_DIR", "statistical_report_plots")
+_REPORTS_BASE = os.getenv("EVALUATION_SVC_REPORTS", "evaluation-svc-reports")
+
+XAI_VALIDATION_AGGREGATE_REPORT_PLOTS_DIR   = os.getenv("XAI_VALIDATION_AGGREGATE_REPORT_PLOTS_DIR",   os.path.join(_REPORTS_BASE, "xai-validation-svc", "aggregate_report_plots"))
+XAI_VALIDATION_STATISTICAL_REPORT_PLOTS_DIR = os.getenv("XAI_VALIDATION_STATISTICAL_REPORT_PLOTS_DIR", os.path.join(_REPORTS_BASE, "xai-validation-svc", "statistical_report_plots"))
+CANCER_AGENT_AGGREGATE_REPORT_PLOTS_DIR  = os.getenv("CANCER_AGENT_AGGREGATE_REPORT_PLOTS_DIR",  os.path.join(_REPORTS_BASE, "cancer-agent",        "aggregate_report_plots"))
+CANCER_AGENT_STATISTICAL_REPORT_PLOTS_DIR = os.getenv("CANCER_AGENT_STATISTICAL_REPORT_PLOTS_DIR", os.path.join(_REPORTS_BASE, "cancer-agent",       "statistical_report_plots"))

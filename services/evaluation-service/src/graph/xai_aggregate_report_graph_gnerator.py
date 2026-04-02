@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np 
 import seaborn as sns
 
-from core.config import XAI_AGGREGATE_REPORT_PLOTS_DIR
+from core.config import XAI_VALIDATION_AGGREGATE_REPORT_PLOTS_DIR
 from core.mongo_client import load_latest_xai_report
 from log.logger import logger 
 
@@ -241,7 +241,7 @@ def _build_collage_c(payload: dict, run_dir: str) -> None:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def generate_xai_aggregate_report_graphs(output_dir: str = XAI_AGGREGATE_REPORT_PLOTS_DIR) -> None:
+def generate_xai_aggregate_report_graphs(output_dir: str = XAI_VALIDATION_AGGREGATE_REPORT_PLOTS_DIR) -> None:
     """
     Load the latest XAI evaluation report from MongoDB and produce three
     high-resolution collage PNGs saved in a timestamped subfolder of *output_dir*.
@@ -281,8 +281,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--output-dir",
-        default=XAI_AGGREGATE_REPORT_PLOTS_DIR,
-        help=f"Root directory for output (default: {XAI_AGGREGATE_REPORT_PLOTS_DIR}, override with XAI_AGGREGATE_REPORT_PLOTS_DIR env var)",
+        default=XAI_VALIDATION_AGGREGATE_REPORT_PLOTS_DIR,
+        help=f"Root directory for output (default: {XAI_VALIDATION_AGGREGATE_REPORT_PLOTS_DIR}, override with XAI_VALIDATION_AGGREGATE_REPORT_PLOTS_DIR env var)",
     )
     args = parser.parse_args()
     generate_xai_aggregate_report_graphs(output_dir=args.output_dir)

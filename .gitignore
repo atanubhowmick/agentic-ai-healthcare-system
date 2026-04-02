@@ -154,6 +154,5 @@ __marimo__/
 # Exported ML models 
 trained_model/
 
-# XAI evaluation report charts
-**/aggregate_report_plots/
-**/statistical_report_plots/
+# Evaluation service report output
+**/evaluation-svc-reports/
