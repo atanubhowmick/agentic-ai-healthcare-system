@@ -20,10 +20,22 @@ from log.logger import logger
 
 
 _DPI = 300
-_PANEL_LABEL_FONTSIZE = 11
+_SUPTITLE_FONTSIZE = 15
+_PANEL_LABEL_FONTSIZE = 14
 _PANEL_LABEL_WEIGHT = "bold"
+_AXIS_LABEL_FONTSIZE = 12
+_TICK_FONTSIZE = 11
+_LEGEND_FONTSIZE = 11
 _BORDER_COLOR = "#444444"
 _BORDER_WIDTH = 1.5
+
+# Apply globally so all axes inherit consistent font sizes
+plt.rcParams.update({
+    "axes.labelsize":  _AXIS_LABEL_FONTSIZE,
+    "xtick.labelsize": _TICK_FONTSIZE,
+    "ytick.labelsize": _TICK_FONTSIZE,
+    "legend.fontsize": _LEGEND_FONTSIZE,
+})
 
 
 def _add_panel_border(ax: plt.Axes) -> None:
@@ -145,7 +157,7 @@ def _draw_reliability_radar(ax: plt.Axes, payload: dict) -> None:
     ax.plot(angles, m_values, linewidth=1.5)
     ax.fill(angles, m_values, alpha=0.25)
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(m_labels, fontsize=9)
+    ax.set_xticklabels(m_labels, fontsize=_TICK_FONTSIZE)
     ax.set_title("(D) Overall Reliability Radar",
                  fontweight=_PANEL_LABEL_WEIGHT, fontsize=_PANEL_LABEL_FONTSIZE, pad=15)
     ax.spines["polar"].set_visible(True)
@@ -184,7 +196,7 @@ def _draw_consistency_pie(ax: plt.Axes, payload: dict) -> None:
 def _build_collage_a(payload: dict, run_dir: str) -> None:
     """Decision & Safety Performance — 2×2 grid of 4 panels."""
     fig, axes = plt.subplots(2, 2, figsize=(16, 12), dpi=_DPI)
-    fig.suptitle("Decision & Safety Performance", fontsize=16, fontweight="bold", y=1.01)
+    fig.suptitle("Decision & Safety Performance", fontsize=_SUPTITLE_FONTSIZE, fontweight="bold", y=1.01)
     sns.set_theme(style="whitegrid")
 
     _draw_decision_performance(axes[0, 0], payload)
@@ -201,7 +213,7 @@ def _build_collage_a(payload: dict, run_dir: str) -> None:
 def _build_collage_b(payload: dict, run_dir: str) -> None:
     """Explainability & Interpretation — 2x2 grid, B4 uses polar axes."""
     fig = plt.figure(figsize=(16, 12), dpi=_DPI)
-    fig.suptitle("Explainability & Interpretation", fontsize=16, fontweight="bold", y=1.01)
+    fig.suptitle("Explainability & Interpretation", fontsize=_SUPTITLE_FONTSIZE, fontweight="bold", y=1.01)
     sns.set_theme(style="whitegrid")
 
     gs = gridspec.GridSpec(2, 2, figure=fig)
@@ -225,7 +237,7 @@ def _build_collage_b(payload: dict, run_dir: str) -> None:
 def _build_collage_c(payload: dict, run_dir: str) -> None:
     """Robustness & Stability — 1x2 grid of 2 panels."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 6), dpi=_DPI)
-    fig.suptitle("Robustness & Stability", fontsize=16, fontweight="bold", y=1.02)
+    fig.suptitle("Robustness & Stability", fontsize=_SUPTITLE_FONTSIZE, fontweight="bold", y=1.02)
     sns.set_theme(style="whitegrid")
 
     _draw_stability_analysis(axes[0], payload)

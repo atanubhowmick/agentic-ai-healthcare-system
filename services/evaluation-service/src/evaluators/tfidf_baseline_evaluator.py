@@ -54,6 +54,7 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
     f1_score,
+    roc_auc_score,
     roc_curve,
 )
 from sklearn.decomposition import TruncatedSVD
@@ -500,14 +501,32 @@ class TfidfBaselineEvaluator:
                 for k, v in pc_raw.items()
                 if k in labels
             }
+
+            roc_auc_ovr_weighted = None
+            roc_auc_ovr_macro    = None
+            try:
+                y_proba = clf.predict_proba(X_te_feat)
+                roc_auc_ovr_weighted = round(
+                    roc_auc_score(y_te, y_proba, multi_class="ovr",
+                                  average="weighted"), 4,
+                )
+                roc_auc_ovr_macro = round(
+                    roc_auc_score(y_te, y_proba, multi_class="ovr",
+                                  average="macro"), 4,
+                )
+            except Exception:
+                pass
+
             return {
                 task_name: {
-                    "n":           len(y_te),
-                    "train_n":     len(y_tr),
-                    "accuracy":    round(acc,  4),
-                    "f1_weighted": round(f1_w, 4),
-                    "f1_macro":    round(f1_m, 4),
-                    "per_class":   per_class,
+                    "n":                    len(y_te),
+                    "train_n":              len(y_tr),
+                    "accuracy":             round(acc,  4),
+                    "f1_weighted":          round(f1_w, 4),
+                    "f1_macro":             round(f1_m, 4),
+                    "roc_auc_ovr_weighted": roc_auc_ovr_weighted,
+                    "roc_auc_ovr_macro":    roc_auc_ovr_macro,
+                    "per_class":            per_class,
                 }
             }
         except Exception as exc:

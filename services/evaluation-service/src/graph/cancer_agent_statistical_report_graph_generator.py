@@ -18,10 +18,22 @@ from core.mongo_client import load_latest_tfidf_report  # noqa: E402
 from log.logger import logger  # noqa: E402
 
 _DPI = 300
-_PANEL_LABEL_FONTSIZE = 11
-_PANEL_LABEL_WEIGHT = "bold"
+_TITLE_FONTSIZE = 15
+_TITLE_WEIGHT = "bold"
+_AXIS_LABEL_FONTSIZE = 12
+_TICK_FONTSIZE = 11
+_LEGEND_FONTSIZE = 11
+_ANNOT_FONTSIZE = 10
 _BORDER_COLOR = "#444444"
 _BORDER_WIDTH = 1.5
+
+# Apply globally so all axes inherit consistent font sizes
+plt.rcParams.update({
+    "axes.labelsize":  _AXIS_LABEL_FONTSIZE,
+    "xtick.labelsize": _TICK_FONTSIZE,
+    "ytick.labelsize": _TICK_FONTSIZE,
+    "legend.fontsize": _LEGEND_FONTSIZE,
+})
 
 
 def _add_border(ax: plt.Axes) -> None:
@@ -40,11 +52,10 @@ def _extract_arrays(per_case_rows: list[dict]):
 
 
 # ---------------------------------------------------------------------------
-# Individual panel draw helpers
+# Individual chart generators
 # ---------------------------------------------------------------------------
 
-def _draw_confusion_matrix(ax: plt.Axes, cm_data: dict) -> None:
-    """(a) 2×2 confusion matrix heatmap, light→dark blue."""
+def _generate_confusion_matrix(cm_data: dict, title: str, filename: str, run_dir: str) -> None:
     tn = cm_data.get("tn", 0)
     fp = cm_data.get("fp", 0)
     fn = cm_data.get("fn", 0)
@@ -52,6 +63,8 @@ def _draw_confusion_matrix(ax: plt.Axes, cm_data: dict) -> None:
 
     cm = np.array([[tn, fp], [fn, tp]])
 
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=_DPI)
+    sns.set_theme(style="whitegrid")
     sns.heatmap(
         cm,
         annot=True,
@@ -66,20 +79,26 @@ def _draw_confusion_matrix(ax: plt.Axes, cm_data: dict) -> None:
     )
     ax.set_xlabel("Predicted Label")
     ax.set_ylabel("Actual Label")
-    ax.set_title("(a) Confusion Matrix", fontweight=_PANEL_LABEL_WEIGHT,
-                 fontsize=_PANEL_LABEL_FONTSIZE)
+    ax.set_title(title, fontweight=_TITLE_WEIGHT, fontsize=_TITLE_FONTSIZE)
     _add_border(ax)
 
+    fig.tight_layout()
+    fig.savefig(os.path.join(run_dir, filename), dpi=_DPI, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("[CANCER_STAT_GRAPH] %s saved", filename)
 
-def _draw_roc_curve(ax: plt.Axes, per_case_rows: list[dict]) -> None:
-    """(b) ROC curve with AUC annotation."""
+
+def _generate_roc_curve(per_case_rows: list[dict], title: str, filename: str, run_dir: str) -> None:
     from sklearn.metrics import roc_auc_score, roc_curve
 
     y_true, y_score, _ = _extract_arrays(per_case_rows)
 
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=_DPI)
+    sns.set_theme(style="whitegrid")
+
     if len(set(y_true.tolist())) < 2:
         ax.text(0.5, 0.5, "Insufficient class variety\nfor ROC curve",
-                ha="center", va="center", transform=ax.transAxes, fontsize=10)
+                ha="center", va="center", transform=ax.transAxes, fontsize=_ANNOT_FONTSIZE)
     else:
         fpr, tpr, _ = roc_curve(y_true, y_score)
         auc_val     = roc_auc_score(y_true, y_score)
@@ -87,62 +106,44 @@ def _draw_roc_curve(ax: plt.Axes, per_case_rows: list[dict]) -> None:
         ax.plot([0, 1], [0, 1], linestyle="--", color="gray", linewidth=1, label="Random")
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1.02)
-        ax.legend(loc="lower right", fontsize=9)
+        ax.legend(loc="lower right", fontsize=_LEGEND_FONTSIZE)
 
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title("(b) ROC Curve", fontweight=_PANEL_LABEL_WEIGHT,
-                 fontsize=_PANEL_LABEL_FONTSIZE)
+    ax.set_title(title, fontweight=_TITLE_WEIGHT, fontsize=_TITLE_FONTSIZE)
     ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.8)
     _add_border(ax)
 
+    fig.tight_layout()
+    fig.savefig(os.path.join(run_dir, filename), dpi=_DPI, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("[CANCER_STAT_GRAPH] %s saved", filename)
 
-def _draw_pr_curve(ax: plt.Axes, per_case_rows: list[dict]) -> None:
-    """(c) Precision–Recall curve with PR-AUC annotation."""
+
+def _generate_pr_curve(per_case_rows: list[dict], title: str, filename: str, run_dir: str) -> None:
     from sklearn.metrics import average_precision_score, precision_recall_curve
 
     y_true, y_score, _ = _extract_arrays(per_case_rows)
 
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=_DPI)
+    sns.set_theme(style="whitegrid")
+
     if len(set(y_true.tolist())) < 2:
         ax.text(0.5, 0.5, "Insufficient class variety\nfor PR curve",
-                ha="center", va="center", transform=ax.transAxes, fontsize=10)
+                ha="center", va="center", transform=ax.transAxes, fontsize=_ANNOT_FONTSIZE)
     else:
         precision, recall, _ = precision_recall_curve(y_true, y_score)
         pr_auc = average_precision_score(y_true, y_score)
         ax.plot(recall, precision, color="#d62728", linewidth=2, label=f"PR-AUC = {pr_auc:.3f}")
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1.02)
-        ax.legend(loc="upper right", fontsize=9)
+        ax.legend(loc="upper right", fontsize=_LEGEND_FONTSIZE)
 
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
-    ax.set_title("(c) Precision–Recall Curve", fontweight=_PANEL_LABEL_WEIGHT,
-                 fontsize=_PANEL_LABEL_FONTSIZE)
+    ax.set_title(title, fontweight=_TITLE_WEIGHT, fontsize=_TITLE_FONTSIZE)
     ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.8)
     _add_border(ax)
-
-
-# ---------------------------------------------------------------------------
-# Collage builder (1×3 horizontal)
-# ---------------------------------------------------------------------------
-
-def _build_collage(
-    cm_data: dict,
-    per_case_rows: list[dict],
-    title: str,
-    filename: str,
-    run_dir: str,
-) -> None:
-    """
-    Build a 1×3 collage: (a) Confusion Matrix | (b) ROC Curve | (c) PR Curve.
-    """
-    fig, axes = plt.subplots(1, 3, figsize=(21, 6), dpi=_DPI)
-    fig.suptitle(title, fontsize=14, fontweight="bold", y=1.02)
-    sns.set_theme(style="whitegrid")
-
-    _draw_confusion_matrix(axes[0], cm_data)
-    _draw_roc_curve(axes[1], per_case_rows)
-    _draw_pr_curve(axes[2], per_case_rows)
 
     fig.tight_layout()
     fig.savefig(os.path.join(run_dir, filename), dpi=_DPI, bbox_inches="tight")
@@ -159,11 +160,15 @@ def generate_cancer_agent_statistical_report_graphs(
 ) -> None:
     """
     Load the latest TF-IDF baseline evaluation report from MongoDB and produce
-    two 1×3 collage PNGs saved in a timestamped subfolder of *output_dir*.
+    6 individual PNGs saved in a timestamped subfolder of *output_dir*.
 
-    Figures:
-        figure1_emergency_statistical.png       — CM | ROC | PR  (Emergency Care)
-        figure2_hospitalization_statistical.png — CM | ROC | PR  (Hospitalization)
+    Files:
+        emergency_confusion_matrix.png       — Emergency Care: 2×2 CM heatmap
+        emergency_roc_curve.png              — Emergency Care: ROC curve with AUC
+        emergency_pr_curve.png               — Emergency Care: Precision–Recall curve
+        hospitalization_confusion_matrix.png — Hospitalization: 2×2 CM heatmap
+        hospitalization_roc_curve.png        — Hospitalization: ROC curve with AUC
+        hospitalization_pr_curve.png         — Hospitalization: Precision–Recall curve
 
     Requires:
         - confusion_matrix (tn/fp/fn/tp) in each binary task's metrics
@@ -183,43 +188,69 @@ def generate_cancer_agent_statistical_report_graphs(
     run_dir = os.path.join(output_dir, ts)
     os.makedirs(run_dir, exist_ok=True)
 
-    # -- Figure 1: Emergency --------------------------------------------------
-    emerg = metrics.get("emergency_care_needed", {})
+    # -- Emergency Care -------------------------------------------------------
+    emerg      = metrics.get("emergency_care_needed", {})
     emerg_cm   = emerg.get("confusion_matrix", {})
     emerg_rows = emerg.get("per_case_rows", [])
 
     if not emerg_cm:
-        logger.warning("[CANCER_STAT_GRAPH] Emergency confusion_matrix missing — skipping Figure 1.")
-    elif not emerg_rows:
-        logger.warning("[CANCER_STAT_GRAPH] Emergency per_case_rows missing — skipping Figure 1.")
+        logger.warning("[CANCER_STAT_GRAPH] Emergency confusion_matrix missing — skipping.")
     else:
-        _build_collage(
-            cm_data=emerg_cm,
-            per_case_rows=emerg_rows,
-            title="Emergency Care - Statistical Evaluation",
-            filename="figure1_emergency_statistical.png",
+        _generate_confusion_matrix(
+            emerg_cm,
+            title="Emergency Care — Confusion Matrix",
+            filename="emergency_confusion_matrix.png",
             run_dir=run_dir,
         )
 
-    # -- Figure 2: Hospitalization --------------------------------------------
-    hosp = metrics.get("hospitalization_needed", {})
+    if not emerg_rows:
+        logger.warning("[CANCER_STAT_GRAPH] Emergency per_case_rows missing — skipping ROC/PR.")
+    else:
+        _generate_roc_curve(
+            emerg_rows,
+            title="Emergency Care — ROC Curve",
+            filename="emergency_roc_curve.png",
+            run_dir=run_dir,
+        )
+        _generate_pr_curve(
+            emerg_rows,
+            title="Emergency Care — Precision–Recall Curve",
+            filename="emergency_pr_curve.png",
+            run_dir=run_dir,
+        )
+
+    # -- Hospitalization -------------------------------------------------------
+    hosp      = metrics.get("hospitalization_needed", {})
     hosp_cm   = hosp.get("confusion_matrix", {})
     hosp_rows = hosp.get("per_case_rows", [])
 
     if not hosp_cm:
-        logger.warning("[CANCER_STAT_GRAPH] Hospitalization confusion_matrix missing — skipping Figure 2.")
-    elif not hosp_rows:
-        logger.warning("[CANCER_STAT_GRAPH] Hospitalization per_case_rows missing — skipping Figure 2.")
+        logger.warning("[CANCER_STAT_GRAPH] Hospitalization confusion_matrix missing — skipping.")
     else:
-        _build_collage(
-            cm_data=hosp_cm,
-            per_case_rows=hosp_rows,
-            title="Hospitalization - Statistical Evaluation",
-            filename="figure2_hospitalization_statistical.png",
+        _generate_confusion_matrix(
+            hosp_cm,
+            title="Hospitalization — Confusion Matrix",
+            filename="hospitalization_confusion_matrix.png",
             run_dir=run_dir,
         )
 
-    logger.info("[CANCER_STAT_GRAPH] Statistical collages saved to '%s'", run_dir)
+    if not hosp_rows:
+        logger.warning("[CANCER_STAT_GRAPH] Hospitalization per_case_rows missing — skipping ROC/PR.")
+    else:
+        _generate_roc_curve(
+            hosp_rows,
+            title="Hospitalization — ROC Curve",
+            filename="hospitalization_roc_curve.png",
+            run_dir=run_dir,
+        )
+        _generate_pr_curve(
+            hosp_rows,
+            title="Hospitalization — Precision–Recall Curve",
+            filename="hospitalization_pr_curve.png",
+            run_dir=run_dir,
+        )
+
+    logger.info("[CANCER_STAT_GRAPH] Statistical charts saved to '%s'", run_dir)
     print(f"Cancer agent statistical charts saved in folder: {run_dir}")
 
 
@@ -230,7 +261,7 @@ def generate_cancer_agent_statistical_report_graphs(
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Generate cancer agent statistical collages from the latest MongoDB report."
+        description="Generate cancer agent statistical charts from the latest MongoDB report."
     )
     parser.add_argument(
         "--output-dir",

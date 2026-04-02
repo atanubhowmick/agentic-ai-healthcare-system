@@ -19,12 +19,24 @@ from core.mongo_client import load_latest_tfidf_report
 from log.logger import logger
 
 _DPI = 300
-_TITLE_FONTSIZE = 13
+_TITLE_FONTSIZE = 15
 _TITLE_WEIGHT = "bold"
+_AXIS_LABEL_FONTSIZE = 12
+_TICK_FONTSIZE = 11
+_LEGEND_FONTSIZE = 11
+_BAR_LABEL_FONTSIZE = 10
 _BORDER_COLOR = "#444444"
 _BORDER_WIDTH = 1.5
 
 _SEVERITY_ORDER = ["LOW", "HIGH", "CRITICAL"]
+
+# Apply globally so all axes inherit consistent font sizes
+plt.rcParams.update({
+    "axes.labelsize":  _AXIS_LABEL_FONTSIZE,
+    "xtick.labelsize": _TICK_FONTSIZE,
+    "ytick.labelsize": _TICK_FONTSIZE,
+    "legend.fontsize": _LEGEND_FONTSIZE,
+})
 
 
 def _add_border(ax: plt.Axes) -> None:
@@ -43,7 +55,7 @@ def _label_bars(ax: plt.Axes, fmt: str = "{:.4f}") -> None:
                 bar.get_x() + bar.get_width() / 2,
                 h + 0.01,
                 fmt.format(h),
-                ha="center", va="bottom", fontsize=9,
+                ha="center", va="bottom", fontsize=_BAR_LABEL_FONTSIZE,
             )
 
 
@@ -86,13 +98,25 @@ def generate_accuracy_comparison(metrics: dict, run_dir: str) -> None:
 # ---------------------------------------------------------------------------
 
 def generate_roc_auc_comparison(metrics: dict, run_dir: str) -> None:
-    emerg = metrics.get("emergency_care_needed", {})
-    hosp  = metrics.get("hospitalization_needed", {})
+    emerg  = metrics.get("emergency_care_needed", {})
+    hosp   = metrics.get("hospitalization_needed", {})
+    sev    = metrics.get("severity", {})
+    cancer = metrics.get("cancer_type", {})
 
-    labels = ["Emergency\nCare", "Hospitalization"]
-    values = [emerg.get("roc_auc", 0), hosp.get("roc_auc", 0)]
+    labels = [
+        "Emergency\nCare",
+        "Hospitalization",
+        "Severity",
+        "Cancer Type",
+    ]
+    values = [
+        emerg.get("roc_auc", 0),
+        hosp.get("roc_auc", 0),
+        sev.get("roc_auc_ovr_weighted") or 0,
+        cancer.get("roc_auc_ovr_weighted") or 0,
+    ]
 
-    fig, ax = plt.subplots(figsize=(8, 6), dpi=_DPI)
+    fig, ax = plt.subplots(figsize=(12, 6), dpi=_DPI)
     sns.set_theme(style="whitegrid")
     sns.barplot(x=labels, y=values, ax=ax)
     ax.set_ylim(0, 1.15)
@@ -130,16 +154,6 @@ def _macro_pr_from_per_class(task: dict) -> tuple[float, float]:
     return prec, rec
 
 
-def _weighted_pr_from_per_class(task: dict) -> tuple[float, float]:
-    """Weighted-average precision and recall using per-class support."""
-    per_class    = task.get("per_class", {})
-    total        = sum(v.get("support", 0) for v in per_class.values())
-    if not total:
-        return 0.0, 0.0
-    prec = round(sum(v.get("precision", 0) * v.get("support", 0) for v in per_class.values()) / total, 4)
-    rec  = round(sum(v.get("recall",    0) * v.get("support", 0) for v in per_class.values()) / total, 4)
-    return prec, rec
-
 
 def generate_f1_comparison(metrics: dict, run_dir: str) -> None:
     emerg  = metrics.get("emergency_care_needed", {})
@@ -151,24 +165,22 @@ def generate_f1_comparison(metrics: dict, run_dir: str) -> None:
     emerg_prec, emerg_rec = _precision_from_cm(emerg), emerg.get("sensitivity_recall", 0)
     hosp_prec,  hosp_rec  = _precision_from_cm(hosp),  hosp.get("sensitivity_recall",  0)
 
-    # Severity — macro P/R across LOW/HIGH/CRITICAL (support not stored for severity)
-    sev_prec, sev_rec = _macro_pr_from_per_class(sev)
-
-    # Cancer type — weighted P/R using per-class support
-    cancer_prec, cancer_rec = _weighted_pr_from_per_class(cancer)
+    # Severity and Cancer type — macro P/R/F1 across classes
+    sev_prec,    sev_rec    = _macro_pr_from_per_class(sev)
+    cancer_prec, cancer_rec = _macro_pr_from_per_class(cancer)
 
     task_labels = [
         "Emergency\nCare",
         "Hospitalization",
         "Severity\n(Macro)",
-        "Cancer Type\n(Weighted)",
+        "Cancer Type\n(Macro)",
     ]
     rows = []
     for label, prec, rec, f1 in [
-        (task_labels[0], emerg_prec,  emerg_rec,  emerg.get("f1_score",    0)),
-        (task_labels[1], hosp_prec,   hosp_rec,   hosp.get("f1_score",     0)),
-        (task_labels[2], sev_prec,    sev_rec,    sev.get("f1_weighted",   0)),
-        (task_labels[3], cancer_prec, cancer_rec, cancer.get("f1_weighted", 0)),
+        (task_labels[0], emerg_prec,  emerg_rec,  emerg.get("f1_score",  0)),
+        (task_labels[1], hosp_prec,   hosp_rec,   hosp.get("f1_score",   0)),
+        (task_labels[2], sev_prec,    sev_rec,    sev.get("f1_macro",    0)),
+        (task_labels[3], cancer_prec, cancer_rec, cancer.get("f1_macro", 0)),
     ]:
         rows.append({"Task": label, "Metric": "Precision", "Value": prec})
         rows.append({"Task": label, "Metric": "Recall",    "Value": rec})

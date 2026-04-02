@@ -18,10 +18,22 @@ from core.mongo_client import load_latest_xai_report
 from log.logger import logger
 
 _DPI = 300
-_TITLE_FONTSIZE = 13
+_TITLE_FONTSIZE = 15
 _TITLE_WEIGHT = "bold"
+_AXIS_LABEL_FONTSIZE = 12
+_TICK_FONTSIZE = 11
+_LEGEND_FONTSIZE = 11
+_ANNOT_FONTSIZE = 10
 _BORDER_COLOR = "#444444"
 _BORDER_WIDTH = 1.5
+
+# Apply globally so all axes inherit consistent font sizes
+plt.rcParams.update({
+    "axes.labelsize":  _AXIS_LABEL_FONTSIZE,
+    "xtick.labelsize": _TICK_FONTSIZE,
+    "ytick.labelsize": _TICK_FONTSIZE,
+    "legend.fontsize": _LEGEND_FONTSIZE,
+})
 
 
 def _add_panel_border(ax: plt.Axes) -> None:
@@ -92,7 +104,7 @@ def generate_roc_curve(payload: dict, run_dir: str) -> None:
 
     if len(set(y_true)) < 2:
         ax.text(0.5, 0.5, "Insufficient class variety for ROC curve",
-                ha="center", va="center", transform=ax.transAxes, fontsize=11)
+                ha="center", va="center", transform=ax.transAxes, fontsize=_ANNOT_FONTSIZE)
     else:
         fpr, tpr, _ = roc_curve(y_true, y_score)
         auc_val     = roc_auc_score(y_true, y_score)
@@ -100,7 +112,7 @@ def generate_roc_curve(payload: dict, run_dir: str) -> None:
         ax.plot([0, 1], [0, 1], linestyle="--", color="gray", linewidth=1, label="Random")
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1.02)
-        ax.legend(loc="lower right", fontsize=10)
+        ax.legend(loc="lower right", fontsize=_LEGEND_FONTSIZE)
 
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate (Sensitivity)")
@@ -127,14 +139,14 @@ def generate_pr_curve(payload: dict, run_dir: str) -> None:
 
     if len(set(y_true)) < 2:
         ax.text(0.5, 0.5, "Insufficient class variety for PR curve",
-                ha="center", va="center", transform=ax.transAxes, fontsize=11)
+                ha="center", va="center", transform=ax.transAxes, fontsize=_ANNOT_FONTSIZE)
     else:
         precision, recall, _ = precision_recall_curve(y_true, y_score)
         pr_auc = average_precision_score(y_true, y_score)
         ax.plot(recall, precision, color="#d62728", linewidth=2, label=f"PR-AUC = {pr_auc:.3f}")
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1.02)
-        ax.legend(loc="upper right", fontsize=10)
+        ax.legend(loc="upper right", fontsize=_LEGEND_FONTSIZE)
 
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
