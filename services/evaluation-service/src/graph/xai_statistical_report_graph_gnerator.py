@@ -160,18 +160,98 @@ def generate_pr_curve(payload: dict, run_dir: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Chart 4 — Confidence Distribution
+# ---------------------------------------------------------------------------
+
+def generate_confidence_distribution(payload: dict, run_dir: str) -> None:
+    rows = payload.get("per_case_decisions", [])
+
+    correct_conf = [
+        r["confidence_score"] for r in rows
+        if (r["validator_decision"] == "APPROVE" and r["true_label"] == "safe")
+        or (r["validator_decision"] in ("REJECT", "REVIEW") and r["true_label"] == "unsafe")
+    ]
+    wrong_conf = [
+        r["confidence_score"] for r in rows
+        if (r["validator_decision"] == "APPROVE" and r["true_label"] == "unsafe")
+        or (r["validator_decision"] in ("REJECT", "REVIEW") and r["true_label"] == "safe")
+    ]
+
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=_DPI)
+    sns.set_theme(style="whitegrid")
+
+    if correct_conf:
+        sns.histplot(correct_conf, color="green", label="Correct", kde=True, ax=ax,
+                     alpha=0.5, bins=20)
+    if wrong_conf:
+        sns.histplot(wrong_conf, color="red", label="Incorrect", kde=True, ax=ax,
+                     alpha=0.5, bins=20)
+
+    ax.set_xlabel("Confidence Score")
+    ax.set_ylabel("Frequency")
+    ax.set_title("Confidence Distribution for Validator Decisions",
+                 fontweight=_TITLE_WEIGHT, fontsize=_TITLE_FONTSIZE)
+    ax.legend(fontsize=_LEGEND_FONTSIZE)
+    _add_panel_border(ax)
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(run_dir, "confidence_distribution.png"), dpi=_DPI, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("[STAT_GRAPH] confidence_distribution.png saved")
+
+
+# ---------------------------------------------------------------------------
+# Chart 5 — Risk vs Confidence Scatter
+# ---------------------------------------------------------------------------
+
+def generate_risk_vs_confidence(payload: dict, run_dir: str) -> None:
+    rows = payload.get("per_case_decisions", [])
+
+    _COLORS = {"APPROVE": "green", "REJECT": "red", "REVIEW": "orange"}
+
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=_DPI)
+    sns.set_theme(style="whitegrid")
+
+    for decision, color in _COLORS.items():
+        subset = [r for r in rows if r["validator_decision"] == decision]
+        if subset:
+            ax.scatter(
+                [r["risk_score"] for r in subset],
+                [r["confidence_score"] for r in subset],
+                color=color,
+                alpha=0.6,
+                label=decision.capitalize(),
+                s=30,
+            )
+
+    ax.set_xlabel("Risk Score")
+    ax.set_ylabel("Confidence Score")
+    ax.set_title("Risk vs Confidence Decision Boundary",
+                 fontweight=_TITLE_WEIGHT, fontsize=_TITLE_FONTSIZE)
+    ax.legend(fontsize=_LEGEND_FONTSIZE)
+    _add_panel_border(ax)
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(run_dir, "risk_vs_confidence.png"), dpi=_DPI, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("[STAT_GRAPH] risk_vs_confidence.png saved")
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
 def generate_xai_statistical_report_graphs(output_dir: str = XAI_VALIDATION_STATISTICAL_REPORT_PLOTS_DIR) -> None:
     """
-    Load the latest XAI evaluation report from MongoDB and produce three
+    Load the latest XAI evaluation report from MongoDB and produce five
     high-resolution statistical charts saved in a timestamped subfolder of *output_dir*.
 
     Charts:
         confusion_matrix.png        — Confusion Matrix heatmap
         roc_curve.png               — ROC Curve with AUC
         precision_recall_curve.png  — Precision–Recall Curve with PR-AUC
+        confidence_distribution.png — KDE histogram: correct vs incorrect confidence
+        risk_vs_confidence.png      — Scatter: risk score vs confidence, coloured by decision
 
     Requires per_case_decisions to be present in the report (populated by XaiEvaluator).
     """
@@ -191,8 +271,10 @@ def generate_xai_statistical_report_graphs(output_dir: str = XAI_VALIDATION_STAT
     generate_confusion_matrix(report, run_dir)
     generate_roc_curve(report, run_dir)
     generate_pr_curve(report, run_dir)
+    generate_confidence_distribution(report, run_dir)
+    generate_risk_vs_confidence(report, run_dir)
 
-    logger.info("[STAT_GRAPH] 3 statistical charts saved to '%s'", run_dir)
+    logger.info("[STAT_GRAPH] 5 statistical charts saved to '%s'", run_dir)
     print(f"Statistical charts saved in folder: {run_dir}")
 
 
