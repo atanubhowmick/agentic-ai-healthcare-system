@@ -54,6 +54,7 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
     f1_score,
+    roc_auc_score,
     roc_curve,
 )
 from sklearn.decomposition import TruncatedSVD
@@ -80,6 +81,7 @@ def _make_tfidf(train_size: int) -> TfidfVectorizer:
         max_df       = 0.95,
         max_features = 30_000,
         analyzer     = "word",
+        stop_words   = "english",
     )
 
 
@@ -115,6 +117,7 @@ def _make_complaint_tfidf(train_size: int) -> TfidfVectorizer:
         max_df       = 0.95,
         max_features = 5_000,
         analyzer     = "word",
+        stop_words   = "english",
     )
 
 
@@ -414,6 +417,16 @@ class TfidfBaselineEvaluator:
         ys = np.array(y_scores)
         yp = np.array(y_pred)
 
+        per_case_rows = [
+            {
+                "task":              label,
+                "true_label":        int(yt[i]),
+                "predicted_label":   int(yp[i]),
+                "score":             round(float(ys[i]), 4),
+            }
+            for i in range(len(yt))
+        ]
+
         try:
             base = AgentEvaluator.calculate_agent_metrics(yt, ys, yp)
             tn, fp, fn, tp = confusion_matrix(yt, yp).ravel()
@@ -435,6 +448,7 @@ class TfidfBaselineEvaluator:
                         "tn": int(tn), "fp": int(fp),
                         "fn": int(fn), "tp": int(tp),
                     },
+                    "per_case_rows":      per_case_rows,
                 }
             }
         except Exception as exc:
@@ -487,14 +501,32 @@ class TfidfBaselineEvaluator:
                 for k, v in pc_raw.items()
                 if k in labels
             }
+
+            roc_auc_ovr_weighted = None
+            roc_auc_ovr_macro    = None
+            try:
+                y_proba = clf.predict_proba(X_te_feat)
+                roc_auc_ovr_weighted = round(
+                    roc_auc_score(y_te, y_proba, multi_class="ovr",
+                                  average="weighted"), 4,
+                )
+                roc_auc_ovr_macro = round(
+                    roc_auc_score(y_te, y_proba, multi_class="ovr",
+                                  average="macro"), 4,
+                )
+            except Exception:
+                pass
+
             return {
                 task_name: {
-                    "n":           len(y_te),
-                    "train_n":     len(y_tr),
-                    "accuracy":    round(acc,  4),
-                    "f1_weighted": round(f1_w, 4),
-                    "f1_macro":    round(f1_m, 4),
-                    "per_class":   per_class,
+                    "n":                    len(y_te),
+                    "train_n":              len(y_tr),
+                    "accuracy":             round(acc,  4),
+                    "f1_weighted":          round(f1_w, 4),
+                    "f1_macro":             round(f1_m, 4),
+                    "roc_auc_ovr_weighted": roc_auc_ovr_weighted,
+                    "roc_auc_ovr_macro":    roc_auc_ovr_macro,
+                    "per_class":            per_class,
                 }
             }
         except Exception as exc:
@@ -538,11 +570,55 @@ class TfidfBaselineEvaluator:
         clf = _make_svm()
         clf.fit(X_tr_feat, y_tr)
         y_pred  = clf.predict(X_te_feat)
-        correct = sum(1 for p, t in zip(y_pred, y_te) if p == t)
+
+        labels = sorted(set(y_f))
+
+        try:
+            from sklearn.metrics import roc_auc_score
+            y_proba = clf.predict_proba(X_te_feat)
+            roc_auc_ovr_weighted = round(
+                roc_auc_score(y_te, y_proba, multi_class="ovr",
+                              average="weighted", labels=labels), 4,
+            )
+            roc_auc_ovr_macro = round(
+                roc_auc_score(y_te, y_proba, multi_class="ovr",
+                              average="macro", labels=labels), 4,
+            )
+        except Exception:
+            roc_auc_ovr_weighted = None
+            roc_auc_ovr_macro    = None
+
+        f1_w   = round(f1_score(y_te, y_pred, labels=labels, average="weighted", zero_division=0), 4)
+        f1_m   = round(f1_score(y_te, y_pred, labels=labels, average="macro",    zero_division=0), 4)
+        acc    = round(accuracy_score(y_te, y_pred), 4)
+
+        pc_raw = classification_report(
+            y_te, y_pred, labels=labels, zero_division=0, output_dict=True,
+        )
+        per_class = {
+            k: {
+                "precision": round(v["precision"], 4),
+                "recall":    round(v["recall"],    4),
+                "f1_score":  round(v["f1-score"],  4),
+                "support":   int(v["support"]),
+            }
+            for k, v in pc_raw.items() if k in labels
+        }
+
+        cm = confusion_matrix(y_te, y_pred, labels=labels).tolist()
 
         return {
-            "n":              len(y_te),
-            "train_n":        len(y_tr),
-            "match_accuracy": round(correct / len(y_te), 4),
-            "rare_dropped":   dropped,
+            "n":                     len(y_te),
+            "train_n":               len(y_tr),
+            "match_accuracy":        round(accuracy_score(y_te, y_pred), 4),
+            "f1_weighted":           f1_w,
+            "f1_macro":              f1_m,
+            "roc_auc_ovr_weighted":  roc_auc_ovr_weighted,
+            "roc_auc_ovr_macro":     roc_auc_ovr_macro,
+            "rare_dropped":          dropped,
+            "per_class":             per_class,
+            "confusion_matrix":      {
+                "labels": labels,
+                "matrix": cm,
+            },
         }

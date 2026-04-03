@@ -14,13 +14,14 @@ services:
       - healthcare-net
 
   # MongoDB - persistent storage for patient records and session data
+  # Data is persisted to the host path set by $MONGO_DB_PATH (required).
   mongodb:
     image: mongo:latest
     command: ["mongod", "--quiet"]
     ports:
       - "27017:27017"
     volumes:
-      - mongo_data:/data/db
+      - ${MONGO_DB_PATH}:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -163,5 +164,4 @@ networks:
   healthcare-net:
     driver: bridge
 
-volumes:
-  mongo_data:
+volumes: {}

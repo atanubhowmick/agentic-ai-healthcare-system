@@ -148,5 +148,11 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Fine-tuned ClinicalBERT model (generated at runtime by train_clinicalbert.py)
+# Fine-tuned ClinicalBERT model 
 **/clinicalbert_router/
+
+# Exported ML models 
+trained_model/
+
+# Evaluation service report output
+**/evaluation-svc-reports/

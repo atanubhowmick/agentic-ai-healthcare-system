@@ -18,6 +18,7 @@ from deepagents import create_deep_agent
 
 from core.config import OPENAI_MODEL
 from explainers.shap_provider import DiagnosisExplainer
+from explainers import context as explanation_context
 from log.logger import logger
 
 
@@ -35,8 +36,51 @@ _JSON_SCHEMA = """
 BASE_SYSTEM = (
     "You are a Clinical Safety Validator AI Agent. Your goal is to validate specialist AI "
     "diagnoses and treatment recommendations for clinical safety, consistency, and ethical soundness. "
-    "For diagnosis validation: check that severity matches symptoms, emergency care decision is "
-    "appropriate, no dangerous oversights or contradictions exist, and the diagnosis is clinically plausible. "
+
+    # Severity scale context
+    "IMPORTANT — Severity scale used in this system is derived from MIMIC clinical admission patterns: "
+    "LOW = routine or elective discharge (patient stable, no emergency admission required); "
+    "HIGH = hospital admission required; "
+    "CRITICAL = ICU or emergency intervention required. "
+    "This applies to ALL specialist diagnoses (cardiology, neurology, oncology, pathology). "
+    "LOW severity means the condition does not require emergency admission — it does NOT mean "
+    "the underlying condition is clinically insignificant. Do NOT reject a diagnosis solely "
+    "because serious chronic or oncological symptoms are paired with LOW severity — this is "
+    "clinically valid for outpatient or elective cases. "
+
+    # Fix 1 — broadened undertriage exception (principle-based, not symptom-list-based)
+    "UNDERTRIAGE RULE: If the diagnosis itself describes an acute condition — including but not "
+    "limited to STEMI, ACS, stroke, TIA, sepsis, septic shock, respiratory failure, pulmonary "
+    "embolism, aortic dissection, meningitis, status epilepticus, haemodynamic instability, "
+    "altered consciousness, or any condition the specialist labels as requiring immediate "
+    "intervention — AND the diagnosis assigns severity=LOW with emergencyCareNeeded=NO, "
+    "this is an undertriage error regardless of the MIMIC severity label. Flag as REJECT. "
+    "Apply this rule based on the clinical content of the diagnosis, not just symptom keywords. "
+    "ADDITIONAL SIGNAL: If the diagnosisDetails states 'Original admission type: EMERGENCY', "
+    "this means the patient was admitted as an emergency. A severity=LOW with emergencyCareNeeded=NO "
+    "assignment for an emergency admission is a strong undertriage signal — flag as REJECT or REVIEW. "
+
+    # Fix 3 — anchor decision on structured fields, not symptom phrasing
+    "DECISION ANCHORING: Base your recommendation primarily on the structured diagnosis fields "
+    "(severity, emergencyCareNeeded, hospitalizationNeeded) and the clinical content of the "
+    "diagnosisDetails. Treat the free-text symptom description as secondary context only. "
+    "Two descriptions of the same clinical condition must produce the same recommendation. "
+
+    # Fix 4 — readability: target both length and vocabulary
+    "SUMMARY STYLE: Write validation_summary in plain language a nurse or junior doctor can read quickly. "
+    "Maximum 2 short sentences. Use common English words — replace long Latin or Greek medical terms "
+    "with plain alternatives where possible (e.g. 'heart attack' not 'myocardial infarction', "
+    "'low oxygen' not 'hypoxia', 'fits' not 'seizures'). State the key finding and the safety conclusion only. "
+
+    # Sparsity — ensure key_concerns is always populated
+    "KEY CONCERNS: Always populate key_concerns with 1–2 specific clinical observations. "
+    "For APPROVE: state what was checked and found safe (e.g. 'Emergency care correctly flagged', "
+    "'Severity consistent with outpatient oncology presentation'). "
+    "For REJECT or REVIEW: state the specific clinical concern. "
+    "Never leave key_concerns empty. "
+
+    "For diagnosis validation: check that the emergency care decision is appropriate, "
+    "no dangerous oversights or contradictions exist, and the diagnosis is clinically plausible. "
     "Always call check_emergency_consistency and explain_diagnosis_factors tools when validating a diagnosis. "
     "For treatment validation: check the treatment is proportional to the diagnosis, medications are safe, "
     "urgency matches severity, and the plan is evidence-based. "
@@ -98,9 +142,14 @@ def explain_diagnosis_factors(symptoms: str, diagnosis_summary: str) -> str:
         symptoms: Patient symptoms or clinical presentation text.
         diagnosis_summary: Summary of the specialist diagnosis.
     """
-    factors = DiagnosisExplainer().explain_diagnosis(symptoms, diagnosis_summary)
+    explainer = DiagnosisExplainer()
+    factors = explainer.explain_diagnosis(symptoms, diagnosis_summary)
     if not factors:
+        explanation_context.set_factors([])
+        explanation_context.set_method("LLM_FALLBACK")
         return "No explainability factors could be determined."
+    explanation_context.set_factors(factors)
+    explanation_context.set_method(explainer.last_method)
     lines = [
         f"{i}. {f.get('factor', 'Unknown')} | importance: {f.get('importance', 0):.2f} | {f.get('direction', 'neutral')}"
         for i, f in enumerate(factors, start=1)
@@ -112,7 +161,7 @@ def explain_diagnosis_factors(symptoms: str, diagnosis_summary: str) -> str:
 # -- LLM ------------------------------------------------------------------------
 
 logger.debug("Initializing XAI Validation LLM | model: %s", OPENAI_MODEL)
-_llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
+_llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0, seed=42)
 
 
 # -- DeepAgent ------------------------------------------------------------------
