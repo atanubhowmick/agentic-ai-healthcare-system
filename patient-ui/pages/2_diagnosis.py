@@ -120,6 +120,8 @@ if not st.session_state.get("patient_id") or not st.session_state.get("patient_n
 
 patient_id: str = st.session_state.patient_id
 patient_name: str = st.session_state.patient_name
+patient_gender: str = st.session_state.get("patient_gender", "")
+patient_age_group: str = st.session_state.get("patient_age_group", "")
 
 # -- Banner --------------------------------------------------------------------
 render_banner(patient_name=patient_name, patient_id=patient_id)
@@ -157,7 +159,14 @@ with center_col:
         if not symptoms.strip():
             st.error("Please describe your symptoms before submitting.")
         else:
-            st.session_state.pending_symptoms = symptoms.strip()
+            prefix_parts = []
+            if patient_gender:
+                prefix_parts.append(patient_gender)
+            if patient_age_group:
+                prefix_parts.append(f"Age group: {patient_age_group}")
+            prefix = " | ".join(prefix_parts)
+            enriched = f"{prefix} | {symptoms.strip()}" if prefix else symptoms.strip()
+            st.session_state.pending_symptoms = enriched
             st.session_state.is_loading = True
             st.session_state.diagnosis_result = None
             st.session_state.response_time = None
