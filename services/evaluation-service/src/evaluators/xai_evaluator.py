@@ -1,25 +1,6 @@
-"""
-XAI Validation Service Evaluator.
-
-Original options:
-  Option 1 — Validation Decision Accuracy
-  Option 2 — Safety Net Effectiveness
-  Option 4 — Rule Engine Coverage
-  Option 6 — Over-rejection Rate
-
-New XAI quality metrics:
-  Fidelity      — Does the explanation faithfully reflect the decision?
-                  Tested by perturbing severity and checking whether both
-                  the decision AND the explanation change accordingly.
-  Stability     — Does the same input always produce the same recommendation?
-                  Tested by sending identical payloads 3× and measuring agreement.
-  Consistency   — Do near-identical inputs (paraphrased symptoms) produce the
-                  same recommendation?
-  Sparsity      — How focused is the explanation? (avg key_concerns count,
-                  avg summary word count — collected for free during Option 1 calls)
-  Interpretability — How readable is the validation_summary?
-                  Measured via Flesch Reading Ease (computed inline, no extra calls).
-"""
+# Evaluates the XAI validation service using MIMIC-IV cases.
+# Metrics: decision accuracy, safety net effectiveness, rule engine coverage,
+# over-rejection rate, stability, fidelity, consistency, sparsity, interpretability.
 
 from __future__ import annotations
 

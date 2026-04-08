@@ -1,23 +1,5 @@
-"""
-LangGraph node implementations for the Healthcare Orchestrator.
-
-Node execution order (happy path):
-  chroma_lookup → classifier → specialist → [secondary_check → conflict_check]
-  → xai_diagnosis_validator → treatment → xai_treatment_validator → finish
-
-ChromaDB integration:
-  - chroma_lookup_node  : first node - returns cached treatment if similarity >= threshold
-  - xai_diagnosis_validator_node : saves validated diagnosis to ChromaDB (non-blocking)
-  - xai_treatment_validator_node : saves validated treatment to ChromaDB (non-blocking)
-
-Retry loops:
-  - xai_diagnosis_validator → specialist (max MAX_RETRY times, then human review)
-  - xai_treatment_validator → treatment   (max MAX_RETRY times, then human review)
-
-Conflict / human review:
-  - conflict_check → finish (if conflict detected)
-  - any node can set requires_human_review=True → finish node collects it
-"""
+# LangGraph node implementations. Each node returns a partial state dict.
+# Retry loops and human-review gating are driven by flags in AgentState.
 
 import json
 import asyncio
@@ -42,8 +24,6 @@ from log.logger import logger
 
 _llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
 
-# -- Prompts ------------------------------------------------------------------
-
 _CONFLICT_SYSTEM = """You are a medical conflict resolution specialist.
 Two AI agents have assessed the same patient. Determine whether their findings materially conflict.
 
@@ -59,8 +39,6 @@ Respond ONLY with valid JSON (no markdown):
     "resolution_needed": false
 }"""
 
-
-# -- Helpers ------------------------------------------------------------------
 
 def _fire_and_forget(coro) -> None:
     """Schedule a background coroutine and log any exception it raises."""
@@ -81,18 +59,14 @@ def _parse_json(content: str) -> dict:
 
 def _diagnosis_summary(diagnosis: dict) -> str:
     return (
-        diagnosis.get("diagnosysDetails") or   # cardiology (original typo preserved)
-        diagnosis.get("diagnosisDetails") or   # neurology / cancer
+        diagnosis.get("diagnosisDetails") or   # cardiology / neurology / cancer
         diagnosis.get("analysisDetails") or    # pathology
         str(diagnosis)
     )
 
 
-# -- Nodes --------------------------------------------------------------------
-
 async def chroma_lookup_node(state: AgentState) -> dict:
     """
-    First node in the pipeline (step 2.1).
     Searches ChromaDB treatment_outcomes for a semantically similar prior case.
     On cache hit, builds a pre-filled final_response and short-circuits to finish.
     """
@@ -183,7 +157,7 @@ async def classifier_node(state: AgentState) -> dict:
 
 
 async def specialist_node(state: AgentState) -> dict:
-    """Dispatch to the appropriate specialist agent via HTTP (step 2.2)."""
+    """Dispatch to the appropriate specialist agent via HTTP."""
     patient_id = state["patient_id"]
     symptoms = state["symptoms"]
     specialist = state["assigned_specialist"]
@@ -358,9 +332,9 @@ async def conflict_check_node(state: AgentState) -> dict:
 
 async def xai_diagnosis_validator_node(state: AgentState) -> dict:
     """
-    Validate specialist diagnosis via XAI service - retry loop #1 (step 2.3 / 2.4).
-    On successful validation, saves diagnosis outcome to ChromaDB (step 2.4.1).
-    On max retries, triggers human review (step 2.4.3).
+    Validate specialist diagnosis via XAI service — retry loop #1.
+    On successful validation, saves diagnosis outcome to ChromaDB.
+    On max retries, triggers human review.
     """
     patient_id = state["patient_id"]
     symptoms = state["symptoms"]
@@ -379,7 +353,7 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
 
         if is_validated:
             logger.info("[XAI_DIAGNOSIS] Validated | patient: %s", patient_id)
-            # Step 2.4.1: Save validated diagnosis to ChromaDB (fire-and-forget)
+            # Save validated diagnosis to ChromaDB (fire-and-forget)
             _fire_and_forget(save_diagnosis_outcome(
                 patient_id=patient_id,
                 symptoms=symptoms,
@@ -397,7 +371,7 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
 
         # Validation failed
         if new_retry >= MAX_RETRY_COUNT:
-            # Step 2.4.3: Max retries - human intervention needed
+            # Max retries — human intervention needed
             logger.warning("[XAI_DIAGNOSIS] Max retries reached | patient: %s", patient_id)
             return {
                 "diagnosis_validated": False,
@@ -415,7 +389,7 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
                 ],
             }
 
-        # Step 2.4.2: Retry specialist
+        # Retry specialist
         logger.info("[XAI_DIAGNOSIS] Validation failed | attempt: %d - retrying specialist", attempt)
         return {
             "diagnosis_validated": False,
@@ -452,7 +426,7 @@ async def xai_diagnosis_validator_node(state: AgentState) -> dict:
 
 
 async def treatment_node(state: AgentState) -> dict:
-    """Invoke the treatment agent to generate a care plan (step 2.4.1 / 2.5)."""
+    """Invoke the treatment agent to generate a care plan."""
     patient_id = state["patient_id"]
     diagnosis = state.get("specialist_diagnosis", {})
     specialist_agent = state.get("specialist_agent", "Unknown_Specialist")
@@ -497,9 +471,9 @@ async def treatment_node(state: AgentState) -> dict:
 
 async def xai_treatment_validator_node(state: AgentState) -> dict:
     """
-    Validate treatment recommendation via XAI service - retry loop #2 (step 2.5 / 2.6).
-    On successful validation, saves treatment outcome to ChromaDB (step 2.6.1).
-    On max retries, triggers human review (step 2.6.2).
+    Validate treatment recommendation via XAI service — retry loop #2.
+    On successful validation, saves treatment outcome to ChromaDB.
+    On max retries, triggers human review.
     """
     patient_id = state["patient_id"]
     symptoms = state["symptoms"]
@@ -530,7 +504,7 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
 
         if is_validated:
             logger.info("[XAI_TREATMENT] Validated | patient: %s", patient_id)
-            # Step 2.6.1: Save validated treatment to ChromaDB (fire-and-forget)
+            # Save validated treatment to ChromaDB (fire-and-forget)
             _fire_and_forget(save_treatment_outcome(
                 patient_id=patient_id,
                 symptoms=symptoms,
@@ -548,7 +522,7 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
             }
 
         if new_retry >= MAX_RETRY_COUNT:
-            # Step 2.6.2: Max retries - human intervention needed
+            # Max retries — human intervention needed
             logger.warning("[XAI_TREATMENT] Max retries reached | patient: %s", patient_id)
             return {
                 "treatment_validated": False,
@@ -566,7 +540,7 @@ async def xai_treatment_validator_node(state: AgentState) -> dict:
                 ],
             }
 
-        # Step 2.6.2: Retry treatment agent
+        # Retry treatment agent
         logger.info("[XAI_TREATMENT] Validation failed | attempt: %d - retrying treatment", attempt)
         return {
             "treatment_validated": False,
@@ -646,7 +620,6 @@ async def finish_node(state: AgentState) -> dict:
     status_label = "HUMAN_REVIEW_REQUIRED" if requires_review else "COMPLETED"
     logger.info("[FINISH] patient: %s | status: %s", patient_id, status_label)
 
-    # Persist to MongoDB asynchronously (non-blocking)
-    asyncio.create_task(save_case(final_response))
+    _fire_and_forget(save_case(final_response))
 
     return {"final_response": final_response}

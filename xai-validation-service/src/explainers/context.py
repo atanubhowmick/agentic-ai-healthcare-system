@@ -1,18 +1,5 @@
-"""
-Request-scoped context storage for SHAP explanation factors.
-
-Uses Python's contextvars.ContextVar so each async request gets its own
-isolated copy — no shared state between concurrent requests.
-
-Usage:
-    # In the tool (xai_agent.py):
-    explanation_context.set_factors(factors)
-    explanation_context.set_method("SHAP")
-
-    # In validator_service.py after _invoke_agent():
-    factors = explanation_context.get_factors()
-    method  = explanation_context.get_method()
-"""
+# Request-scoped storage for SHAP explanation factors.
+# Uses ContextVar so each async request gets its own isolated copy.
 
 from contextvars import ContextVar
 

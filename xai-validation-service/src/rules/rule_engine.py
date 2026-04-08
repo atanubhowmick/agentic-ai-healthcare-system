@@ -1,27 +1,8 @@
-"""
-Clinical Rule Engine — evaluates deterministic safety rules before the LLM validation step.
-
-Evaluation flow for each rule:
-  1. SpO2 special rules (regex-based oxygen saturation detection).
-  2. Structural rules (no keywords — severity/emergency field checks only).
-  3. Keyword rules (symptom/diagnosis/treatment text matching with optional compound AND).
-
-Returns:
-  (passed, action, reason, triggered_ids)
-  passed=True  → no rules fired, proceed to LLM.
-  passed=False → at least one rule fired:
-                   action="REJECT" → hard stop, return rejection.
-                   action="REVIEW" → inject concern into LLM query, still invoke LLM.
-
-Priority: REJECT rules take precedence over REVIEW rules.
-"""
+# Evaluates deterministic safety rules before the LLM validation step.
+# REJECT rules take precedence over REVIEW rules.
 
 import re
 from log.logger import logger
-
-# ---------------------------------------------------------------------------
-# SpO2 regex
-# ---------------------------------------------------------------------------
 
 # Matches: "SpO2 88%", "O2 sat 82", "oxygen saturation: 78%", "sats 86", "O2 sats 84"
 _SPO2_PATTERN = re.compile(
@@ -41,9 +22,6 @@ def _has_low_spo2(text: str) -> bool:
     return False
 
 
-# ---------------------------------------------------------------------------
-# Field text helpers
-# ---------------------------------------------------------------------------
 
 def _field_text(field: str, symptoms: str, diagnosis_text: str, treatment_text: str) -> str:
     return {
@@ -69,9 +47,6 @@ def _keywords_in_fields(
     return any(kw.lower() in combined for kw in keywords)
 
 
-# ---------------------------------------------------------------------------
-# Rule evaluation
-# ---------------------------------------------------------------------------
 
 def _rule_fires(
     rule: dict,
@@ -126,9 +101,6 @@ def _rule_fires(
         return sev_violated or emg_violated
 
 
-# ---------------------------------------------------------------------------
-# Public interface
-# ---------------------------------------------------------------------------
 
 def evaluate(
     symptoms: str,
@@ -138,24 +110,8 @@ def evaluate(
     treatment_text: str = "",
     rules: list[dict] | None = None,
 ) -> tuple[bool, str, str, list[str]]:
-    """
-    Evaluate all active clinical safety rules against the request.
-
-    Args:
-        symptoms:       Patient symptoms text.
-        severity:       Severity value from the specialist diagnosis (LOW/HIGH/CRITICAL).
-        emergency_care: Emergency care flag (YES/NO).
-        diagnosis_text: Diagnosis details/summary text.
-        treatment_text: Treatment recommendation text (for treatment validation).
-        rules:          Optional list of rule dicts to use. If None, loaded from repository.
-
-    Returns:
-        (passed, action, reason, triggered_rule_ids)
-        passed=True   → no rules fired; proceed to LLM.
-        passed=False  → rule(s) fired:
-                          action="REJECT" → hard stop.
-                          action="REVIEW" → inject concern into LLM query.
-    """
+    """Evaluate all active clinical safety rules. Returns (passed, action, reason, triggered_rule_ids).
+    passed=True → proceed to LLM. passed=False → action is REJECT (hard stop) or REVIEW (inject concern)."""
     if rules is None:
         from rules.rule_repository import load_rules
         rules = load_rules()

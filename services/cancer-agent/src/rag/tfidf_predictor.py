@@ -1,21 +1,6 @@
-"""
-TF-IDF Predictor — Cancer Agent Production Classifier
-======================================================
-Trains TF-IDF + classifier models on MIMIC-IV evaluation cases at startup
-and exposes prediction for structured diagnosis fields, bypassing the LLM
-for those fields to reduce cost and improve consistency.
-
-Fields predicted (not requested from LLM):
-  severity              LOW / HIGH / CRITICAL     (LR)
-  severityConfidence    0-100                     (LR predict_proba)
-  emergencyCareNeeded   YES / NO                  (HistGBM + SVD + Youden)
-  emergencyCareConfidence 0-100                   (HistGBM predict_proba)
-  hospitalizationNeeded YES / NO                  (HistGBM + SVD + Youden)
-  suspectedCancerType   e.g. "Lung Cancer"        (LinearSVC)
-
-At inference only patient symptom text is available (no ICD codes,
-no has_icu_stay). ICD features default to empty string and ICU flag to 0.
-"""
+# Trains TF-IDF + classifier models on MIMIC-IV evaluation cases at startup and predicts
+# structured diagnosis fields (severity, emergency, hospitalisation, cancer type) from
+# symptom text — bypassing the LLM for those fields to improve consistency and reduce cost.
 
 import threading
 
@@ -34,9 +19,7 @@ from core.config import MONGO_DB, MONGO_EVAL_COLLECTION, MONGO_URI
 from log.logger import logger
 
 
-# ---------------------------------------------------------------------------
-# Label helpers (inline — avoids cross-service import)
-# ---------------------------------------------------------------------------
+# Label helpers
 
 _EMERGENCY_ADMISSION_TYPES = frozenset({"EMERGENCY", "DIRECT EMER.", "URGENT"})
 _NON_EMERGENCY_ADMISSION_TYPES = frozenset({
@@ -104,9 +87,7 @@ def _normalise_cancer_type(raw: str) -> str | None:
     return None  # "Other Cancer" excluded from training
 
 
-# ---------------------------------------------------------------------------
-# TF-IDF factory helpers (mirrors evaluation-service implementation)
-# ---------------------------------------------------------------------------
+# TF-IDF factory helpers
 
 def _make_tfidf(n: int) -> TfidfVectorizer:
     return TfidfVectorizer(
@@ -145,16 +126,9 @@ def _youden_threshold(clf, X_train, y_train) -> float:
     return float(thresholds[np.argmax(tpr - fpr)])
 
 
-# ---------------------------------------------------------------------------
-# Predictor — singleton, lazy-trained
-# ---------------------------------------------------------------------------
-
 class TfidfPredictor:
-    """
-    Singleton predictor trained on MIMIC evaluation data.
-    Call ensure_trained() before predict(); training is thread-safe and
-    happens at most once per process lifetime.
-    """
+    """Singleton predictor trained on MIMIC evaluation data at first use.
+    Training is thread-safe and happens at most once per process lifetime."""
 
     def __init__(self) -> None:
         self._lock    = threading.Lock()
@@ -185,10 +159,6 @@ class TfidfPredictor:
         self._tfidf_doc_can: TfidfVectorizer | None           = None
         self._tfidf_icd_can: TfidfVectorizer | None           = None
         self._clf_can: CalibratedClassifierCV | None          = None
-
-    # ------------------------------------------------------------------
-    # Training
-    # ------------------------------------------------------------------
 
     def ensure_trained(self) -> None:
         if self._trained:
@@ -319,16 +289,9 @@ class TfidfPredictor:
         self._clf_can.fit(X, y)
         logger.info("[TFIDF_PRED] Cancer type model ready (%d samples)", len(y))
 
-    # ------------------------------------------------------------------
-    # Prediction
-    # ------------------------------------------------------------------
-
     def predict(self, symptoms: str) -> dict:
-        """
-        Predict structured fields from patient symptom text.
-        ICD codes and has_icu_stay are not available at inference time
-        and default to empty string / 0.
-        """
+        """Predict structured diagnosis fields from symptom text.
+        ICD codes and has_icu_stay default to empty/0 — not available at inference time."""
         self.ensure_trained()
 
         # Safe defaults (conservative: assume hospitalisation needed, uncertain emergency)
@@ -408,10 +371,6 @@ class TfidfPredictor:
         )
         return result
 
-
-# ---------------------------------------------------------------------------
-# Module-level singleton + public API
-# ---------------------------------------------------------------------------
 
 _predictor = TfidfPredictor()
 

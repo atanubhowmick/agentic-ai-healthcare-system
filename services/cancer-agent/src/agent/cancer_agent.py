@@ -1,16 +1,3 @@
-"""
-Cancer Oncology Agent - DeepAgent-based implementation.
-
-Architecture:
-  - Uses deepagents.create_deep_agent (built on LangGraph) as the executor.
-  - @tool decorator exposes the MIMIC-IV search and the response schema.
-  - The agent autonomously decides when to call the MIMIC search tool.
-
-Public interface (used by cancer_service.py):
-  cancer_executor  - the raw DeepAgent instance
-  BASE_SYSTEM      - system prompt (used by service to build messages)
-"""
-
 from langchain.tools import tool
 from langchain_openai import ChatOpenAI
 from deepagents import create_deep_agent
@@ -19,8 +6,6 @@ from core.config import OPENAI_MODEL, MIMIC_SIMILARITY_THRESHOLD, MIMIC_PARTIAL_
 from rag.mimic_retriever import search_similar_cases, is_collection_populated
 from log.logger import logger
 
-
-# -- JSON response schema -------------------------------------------------------
 
 _JSON_SCHEMA = """
 {
@@ -49,21 +34,17 @@ BASE_SYSTEM = (
 )
 
 
-# -- Tools ----------------------------------------------------------------------
-
 @tool
 def get_oncology_response_schema() -> str:
-    """Return the required JSON response schema for oncology diagnosis output.
-    Call this tool whenever you need a reminder of the exact JSON format expected."""
+    """Returns the expected JSON response schema for an oncology diagnosis."""
     return _JSON_SCHEMA
 
 
 @tool
 def search_mimic_cases(symptoms: str, top_k: int = 3) -> str:
-    """Search the MIMIC-IV clinical database for historical oncology cases that are
-    semantically similar to the given patient symptoms. Returns a formatted summary
-    of the most relevant cases to use as evidence-based diagnostic context.
-    Always call this tool for new patient queries (not follow-ups).
+    """Search the MIMIC-IV clinical database for historical oncology cases semantically
+    similar to the given symptoms. Returns a formatted summary of the most relevant cases
+    to use as evidence-based diagnostic context. Call this for all new (non-follow-up) queries.
 
     Args:
         symptoms: Patient symptoms or clinical presentation text to search against.
@@ -81,8 +62,8 @@ def search_mimic_cases(symptoms: str, top_k: int = 3) -> str:
     for i, c in enumerate(cases, start=1):
         score = c["similarity_score"]
         confidence = (
-            "HIGH confidence match"   if score >= MIMIC_SIMILARITY_THRESHOLD else
-            "LOW confidence match"    if score >= MIMIC_PARTIAL_THRESHOLD    else
+            "HIGH confidence match" if score >= MIMIC_SIMILARITY_THRESHOLD else
+            "LOW confidence match"  if score >= MIMIC_PARTIAL_THRESHOLD    else
             "weak match"
         )
         lines.append(
@@ -94,32 +75,17 @@ def search_mimic_cases(symptoms: str, top_k: int = 3) -> str:
             f"  Severity          : {c['severity']}"
         )
 
-    logger.info(
-        "[MIMIC_TOOL] %d case(s) retrieved | top score: %.4f",
-        len(cases), cases[0]["similarity_score"],
-    )
+    logger.info("[MIMIC_TOOL] %d case(s) retrieved | top score: %.4f", len(cases), cases[0]["similarity_score"])
     return "\n\n".join(lines)
 
-
-# -- LLM ------------------------------------------------------------------------
 
 logger.debug("Initializing Cancer/Oncology LLM | model: %s", OPENAI_MODEL)
 _llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
 
-
-# -- DeepAgent ------------------------------------------------------------------
-
 logger.debug("Building Cancer DeepAgent")
-_agent = create_deep_agent(
+cancer_executor = create_deep_agent(
     model=_llm,
     tools=[get_oncology_response_schema, search_mimic_cases],
     system_prompt=BASE_SYSTEM,
 )
 logger.debug("Cancer DeepAgent ready")
-
-
-# -- Public executor ------------------------------------------------------------
-
-cancer_executor = _agent
-
-logger.debug("Cancer executor ready (DeepAgent with MIMIC search tool)")

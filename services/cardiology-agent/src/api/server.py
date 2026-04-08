@@ -10,6 +10,6 @@ router = APIRouter(prefix="/cardiology-agent")
 async def diagnose_heart_condition(request: DiagnosisRequest) -> GenericResponse[DiagnosisResponse]:
     logger.debug("Received /diagnose request | patient_id: %s | is_followup: %s",
                  request.patient_id, request.is_followup)
-    diagnosis_response = diagnose(request)
+    diagnosis_response = await diagnose(request)
     logger.debug("Returning diagnosis for patient %s", request.patient_id)
     return GenericResponse.success(diagnosis_response)

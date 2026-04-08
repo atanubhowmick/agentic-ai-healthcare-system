@@ -1,7 +1,4 @@
-"""
-Async MongoDB persistence for orchestrated cases.
-Non-blocking: if MongoDB is unavailable the service continues without crashing.
-"""
+# Async MongoDB persistence. Non-blocking — service continues if MongoDB is unavailable.
 
 import asyncio
 from datetime import datetime, timezone
