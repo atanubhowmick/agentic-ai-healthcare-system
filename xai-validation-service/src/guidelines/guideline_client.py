@@ -1,10 +1,5 @@
-"""
-ChromaDB client for clinical guideline RAG.
-
-Abstracts are fetched from PubMed at first startup and stored in the
-'clinical_guidelines' collection. Subsequent restarts skip the fetch.
-Used by the constitutional guard to ground P5 (guideline alignment) checks.
-"""
+# ChromaDB client for clinical guideline RAG.
+# PubMed abstracts are seeded into 'clinical_guidelines' at first startup and reused on subsequent restarts.
 
 import threading
 from typing import Optional
@@ -24,9 +19,7 @@ _guidelines_seeded = False
 _GUIDELINE_SIMILARITY_THRESHOLD = 0.60
 
 
-# ---------------------------------------------------------------------------
-# Collection initialisation (lazy, thread-safe singleton)
-# ---------------------------------------------------------------------------
+# Collection initialisation — lazy, thread-safe singleton
 
 def _cosine_relevance_score_fn(distance: float) -> float:
     return 1.0 - distance / 2.0
@@ -62,9 +55,6 @@ def _get_collection():
         return _guidelines_collection
 
 
-# ---------------------------------------------------------------------------
-# Public interface
-# ---------------------------------------------------------------------------
 
 def seed_guidelines() -> None:
     """

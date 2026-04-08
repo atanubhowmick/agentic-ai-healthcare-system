@@ -79,10 +79,6 @@ def _run_tfidf_evaluation(max_cases: int, test_size: float = 0.20) -> None:
             _tfidf_running = False
 
 
-# ---------------------------------------------------------------------------
-# XAI evaluation
-# ---------------------------------------------------------------------------
-
 def start_xai_evaluation(
     max_cases: int,
     max_correct_cases: int = 150,

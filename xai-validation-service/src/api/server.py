@@ -9,11 +9,11 @@ router = APIRouter(prefix="/xai-validator")
 async def validate_diagnosis_endpoint(
     request: DiagnosisValidationRequest,
 ) -> GenericResponse[ValidationResponse]:
-    return run_diagnosis_validation(request)
+    return await run_diagnosis_validation(request)
 
 
 @router.post("/validate-treatment", response_model=GenericResponse[ValidationResponse])
 async def validate_treatment_endpoint(
     request: TreatmentValidationRequest,
 ) -> GenericResponse[ValidationResponse]:
-    return run_treatment_validation(request)
+    return await run_treatment_validation(request)

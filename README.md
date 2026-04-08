@@ -51,13 +51,13 @@ Each service has its own detailed README covering API endpoints, implementation 
 
 | Service | README |
 |---------|--------|
-| Cardiology Agent | [CARDIOLOGY_AGENT_README.md](services/cardiology-agent/CARDIOLOGY_AGENT_README.md) |
-| Neurology Agent | [NEUROLOGY_AGENT_README.md](services/neurology-agent/NEUROLOGY_AGENT_README.md) |
-| Cancer Agent | [CANCER_AGENT_README.md](services/cancer-agent/CANCER_AGENT_README.md) |
-| Pathology Agent | [PATHOLOGY_AGENT_README.md](services/pathology-agent/PATHOLOGY_AGENT_README.md) |
-| Treatment Agent | [TREATMENT_AGENT_README.md](services/treatment-agent/TREATMENT_AGENT_README.md) |
-| Orchestrator Agent | [ORCHESTRATOR_AGENT_README.md](services/orchestrator-agent/ORCHESTRATOR_AGENT_README.md) |
-| XAI Validation Service | [XAI_VALIDATION_SERVICE_README.md](xai-validation-service/XAI_VALIDATION_SERVICE_README.md) |
+| Cardiology Agent | [README.md](services/cardiology-agent/README.md) |
+| Neurology Agent | [README.md](services/neurology-agent/README.md) |
+| Cancer Agent | [README.md](services/cancer-agent/README.md) |
+| Pathology Agent | [README.md](services/pathology-agent/README.md) |
+| Treatment Agent | [README.md](services/treatment-agent/README.md) |
+| Orchestrator Agent | [README.md](services/orchestrator-agent/README.md) |
+| XAI Validation Service | [README.md](xai-validation-service/README.md) |
 | Evaluation Service | [EVALUATION_SERVICE_README.md](services/evaluation-service/EVALUATION_SERVICE_README.md) |
 | Patient UI | [PATIENT_UI_README.md](patient-ui/PATIENT_UI_README.md) |
 

@@ -3,27 +3,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# -- OpenAI model --------------------------------------------------------------
 OPENAI_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-5.2")
+AGENT_NAME = "Cancer_Oncology_Specialist"
+AGENT_ID = "CANCER-AGENT-1004"
 
-# -- MongoDB (MIMIC evaluation cases — shared with evaluation-service) --------
-import os as _os
-MONGO_URI             = _os.getenv("MONGO_URI",             "mongodb://127.0.0.1:27017")
-MONGO_DB              = _os.getenv("MONGO_DB",              "agentic_ai_healthcare_db")
-MONGO_EVAL_COLLECTION = _os.getenv("MONGO_EVAL_COLLECTION", "mimic_evaluation_cases")
+# MongoDB — MIMIC evaluation cases (shared with evaluation-service)
+MONGO_URI             = os.getenv("MONGO_URI",             "mongodb://127.0.0.1:27017")
+MONGO_DB              = os.getenv("MONGO_DB",              "agentic_ai_healthcare_db")
+MONGO_EVAL_COLLECTION = os.getenv("MONGO_EVAL_COLLECTION", "mimic_evaluation_cases")
 
-# -- ChromaDB (external HTTP server, shared with orchestrator) ----------------
+# ChromaDB — external HTTP server shared with orchestrator
 CHROMA_HOST = os.getenv("CHROMA_HOST", "127.0.0.1")
 CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8020"))
 MIMIC_COLLECTION_NAME = "mimic_cancer_cases"
 
-# Minimum cosine similarity to accept a MIMIC case as a strong match (full RAG context).
+# Cosine similarity thresholds for MIMIC case retrieval:
+#   >= MIMIC_SIMILARITY_THRESHOLD → high-confidence RAG context
+#   >= MIMIC_PARTIAL_THRESHOLD    → low-confidence RAG context (flagged in prompt)
+#   below both                    → LLM-only, no MIMIC context
 MIMIC_SIMILARITY_THRESHOLD = float(os.getenv("MIMIC_SIMILARITY_THRESHOLD", "0.75"))
-
-# Below MIMIC_SIMILARITY_THRESHOLD but above this value → partial context (weaker match).
-# The case is still injected into the prompt but flagged as low-confidence reference.
-# Below this value → pure LLM call with no MIMIC context.
-MIMIC_PARTIAL_THRESHOLD = float(os.getenv("MIMIC_PARTIAL_THRESHOLD", "0.60"))
-
-# Number of MIMIC cases to retrieve and inject as RAG context
-MIMIC_TOP_K = int(os.getenv("MIMIC_TOP_K", "3"))
+MIMIC_PARTIAL_THRESHOLD    = float(os.getenv("MIMIC_PARTIAL_THRESHOLD",    "0.60"))
+MIMIC_TOP_K                = int(os.getenv("MIMIC_TOP_K", "3"))

@@ -1,17 +1,6 @@
-"""
-LangGraph workflow for the Healthcare Orchestrator.
-
-Full flow:
-  chroma_lookup → [cache hit → finish]
-               → classifier → specialist → [secondary_check → conflict_check]
-                 → xai_diagnosis_validator → treatment → xai_treatment_validator → finish
-
-ChromaDB integration (step 2.1):
-  chroma_lookup_node is the first node. On a cache hit it short-circuits directly
-  to finish, skipping the full diagnosis/treatment pipeline.
-
-Retry loops and human-review gates are driven by flags set inside the nodes.
-"""
+# LangGraph workflow definition.
+# chroma_lookup → [cache hit → finish] → classifier → specialist → [secondary_check → conflict_check]
+# → xai_diagnosis_validator → treatment → xai_treatment_validator → finish
 
 from langgraph.graph import StateGraph, END
 from agents.state import AgentState
@@ -28,10 +17,8 @@ from agents.nodes import (
 )
 
 
-# -- Routing functions --------------------------------------------------------
-
 def _route_after_chroma_lookup(state: AgentState) -> str:
-    """Step 2.1: cache hit → return immediately; miss → full pipeline."""
+    """Cache hit → return immediately; miss → full pipeline."""
     if state.get("chroma_cache_hit"):
         return "finish"
     return "classifier"
@@ -87,23 +74,9 @@ def _route_after_xai_treatment(state: AgentState) -> str:
     return "treatment"
 
 
-# -- Graph builder ------------------------------------------------------------
-
 def create_orchestrator_graph():
-    """
-    Build and compile the full LangGraph healthcare orchestration workflow.
-
-    Entry  : chroma_lookup (step 2.1 - ChromaDB semantic cache check)
-    Nodes  : chroma_lookup, classifier, specialist, secondary_check, conflict_check,
-             xai_diagnosis_validator, treatment, xai_treatment_validator, finish
-    Loops  : diagnosis retry (specialist ↔ xai_diagnosis_validator, max 3×)
-             treatment retry (treatment  ↔ xai_treatment_validator,  max 3×)
-    Gates  : chroma_lookup (cache hit), conflict_check, human-review flags
-    Specialists: cardiology, neurology, pathology, cancer
-    """
     workflow = StateGraph(AgentState)
 
-    # -- Register nodes --------------------------------------------------------
     workflow.add_node("chroma_lookup",            chroma_lookup_node)
     workflow.add_node("classifier",               classifier_node)
     workflow.add_node("specialist",               specialist_node)
@@ -114,12 +87,8 @@ def create_orchestrator_graph():
     workflow.add_node("xai_treatment_validator",  xai_treatment_validator_node)
     workflow.add_node("finish",                   finish_node)
 
-    # -- Entry point -----------------------------------------------------------
     workflow.set_entry_point("chroma_lookup")
 
-    # -- Edges -----------------------------------------------------------------
-
-    # Step 2.1: cache hit → finish immediately; miss → proceed to classifier
     workflow.add_conditional_edges(
         "chroma_lookup", _route_after_chroma_lookup,
         {"finish": "finish", "classifier": "classifier"},
@@ -147,7 +116,7 @@ def create_orchestrator_graph():
         {"finish": "finish", "xai_diagnosis_validator": "xai_diagnosis_validator"},
     )
 
-    # Retry loop #1: xai_diagnosis_validator ↔ specialist (steps 2.3 / 2.4 / 2.4.2 / 2.4.3)
+    # Retry loop #1: xai_diagnosis_validator ↔ specialist
     workflow.add_conditional_edges(
         "xai_diagnosis_validator", _route_after_xai_diagnosis,
         {"treatment": "treatment", "specialist": "specialist", "finish": "finish"},
@@ -158,7 +127,7 @@ def create_orchestrator_graph():
         {"xai_treatment_validator": "xai_treatment_validator", "finish": "finish"},
     )
 
-    # Retry loop #2: xai_treatment_validator ↔ treatment (steps 2.5 / 2.6 / 2.6.2)
+    # Retry loop #2: xai_treatment_validator ↔ treatment
     workflow.add_conditional_edges(
         "xai_treatment_validator", _route_after_xai_treatment,
         {"finish": "finish", "treatment": "treatment"},

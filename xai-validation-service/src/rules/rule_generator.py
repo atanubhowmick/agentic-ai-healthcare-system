@@ -1,21 +1,5 @@
-"""
-LLM-based clinical safety rule generator.
-
-Reads guideline abstracts from ChromaDB and uses an LLM to extract
-structured clinical safety rules in the standard rule schema format.
-Generated rules are stored in MongoDB with source prefixed by the
-guideline origin (e.g. "AHA/PubMed").
-
-Called once at startup (after ChromaDB guideline seeding) via seed_llm_rules().
-Skips generation if LLM-generated rules already exist in MongoDB.
-
-Step-by-step flow:
-  1. Check MongoDB — skip if LLM_G* rules already exist.
-  2. Search ChromaDB with broad clinical queries to retrieve guideline abstracts.
-  3. For each abstract: call LLM with a structured extraction prompt.
-  4. Validate extracted rules against the rule schema.
-  5. Upsert valid rules to MongoDB and refresh the in-memory cache.
-"""
+# Generates structured clinical safety rules from ChromaDB guideline abstracts using an LLM.
+# Runs once at startup via seed_llm_rules(). Skips if LLM-generated rules already exist in MongoDB.
 
 from __future__ import annotations
 
@@ -132,14 +116,8 @@ def _extract_rules(
 
 
 def seed_llm_rules() -> int:
-    """
-    Generate clinical safety rules from ChromaDB guidelines and store in MongoDB.
-
-    Skips generation if LLM-generated rules already exist.
-
-    Returns:
-        Number of rules generated and stored (0 if skipped or failed).
-    """
+    """Generate clinical safety rules from ChromaDB guidelines and store in MongoDB.
+    Skips if LLM-generated rules already exist. Returns number of rules stored."""
     try:
         client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=3000)
         col = client[MONGODB_DB_NAME]["xai_validation_rules"]

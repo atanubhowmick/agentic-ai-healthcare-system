@@ -1,45 +1,6 @@
-"""
-TF-IDF Baseline Evaluator — Cancer Agent Standalone Comparison
-===============================================================
-Trains TF-IDF + classifier models on MIMIC-IV evaluation cases and
-computes the same metrics as CancerAgentEvaluator, providing a classical
-ML baseline for direct comparison.
-
-Research framing
-----------------
-"Does clinical reasoning from an LLM outperform vocabulary-based
-classification trained on the same dataset?"
-
-Evaluation design
------------------
-- Loads all available MIMIC-IV evaluation cases from MongoDB.
-- Stratified 80/20 train/test split (per task, stratified on task label).
-- Fits one combined-feature classifier per task on the train split.
-- Reports metrics on the held-out test split using the same metric
-  functions as CancerAgentEvaluator so results are directly comparable.
-
-Features used
--------------
-- TF-IDF on document text  (triage complaint + chief complaint + HPI)
-- TF-IDF on icd_codes      (structured ICD-10 code tokens)
-- has_icu_stay binary flag  (severity task only — direct CRITICAL signal)
-
-Classifiers
------------
-- Emergency (binary):     HistGradientBoosting (non-linear interactions, sparse-native)
-- Severity (3-class):     Logistic Regression  (handles class imbalance)
-- Cancer type (multi):    LinearSVC            (outperforms LR on balanced text)
-
-NOTE: The TF-IDF classifier is trained on MIMIC data (supervised),
-      whereas the LLM agent is zero-shot. This gives TF-IDF a training
-      advantage — that asymmetry is intentional and should be reported.
-
-Tasks
------
-emergency_care_needed  binary   admission_type → YES / NO
-severity               3-class  LOW / HIGH / CRITICAL
-cancer_type            match    normalised ICD category accuracy
-"""
+# TF-IDF baseline for Cancer Agent evaluation. Trains on MIMIC-IV cases (stratified 80/20 split)
+# using HistGBM (emergency/hospitalization), LogisticRegression (severity), and LinearSVC (cancer type).
+# TF-IDF is supervised; the LLM agent is zero-shot — that asymmetry is intentional.
 
 from collections import Counter
 
@@ -66,10 +27,6 @@ from evaluators.label_mapper import MimicLabelMapper
 from evaluators.metrics_calculator import AgentEvaluator
 from log.logger import logger
 
-
-# ---------------------------------------------------------------------------
-# Feature builder helpers
-# ---------------------------------------------------------------------------
 
 def _make_tfidf(train_size: int) -> TfidfVectorizer:
     """TF-IDF for clinical document text (unigrams + bigrams)."""
@@ -196,10 +153,6 @@ def _build_features(
     return hstack(parts_tr), hstack(parts_te)
 
 
-# ---------------------------------------------------------------------------
-# Main evaluator
-# ---------------------------------------------------------------------------
-
 class TfidfBaselineEvaluator:
     """
     TF-IDF + structured feature baseline evaluator for Cancer Agent tasks.
@@ -210,20 +163,8 @@ class TfidfBaselineEvaluator:
         self._random_state = random_state
         self._mapper       = MimicLabelMapper()
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def run_evaluation(self, max_cases: int = 0) -> dict:
-        """
-        Full TF-IDF baseline evaluation.
-
-        Args:
-            max_cases: Cap at N records (0 = all available in MongoDB).
-
-        Returns:
-            Evaluation report dict (also persisted to MongoDB).
-        """
+        """Run full TF-IDF baseline evaluation. max_cases=0 means all available records."""
         records = load_evaluation_cases(max_cases=max_cases)
         if not records:
             logger.warning("[TFIDF] No evaluation cases in MongoDB — aborting.")
@@ -234,14 +175,12 @@ class TfidfBaselineEvaluator:
             len(records), self._test_size * 100, self._random_state,
         )
 
-        # ---- Extract feature columns ------------------------------------
         texts      = [r.get("document", "")                          for r in records]
         icd_texts  = [r.get("icd_codes", "").replace(",", " ")       for r in records]
         icu_flags  = [int(bool(r.get("has_icu_stay", 0)))             for r in records]
         complaints = [r.get("chief_complaint", "") or ""             for r in records]
 
 
-        # ---- Derive labels for each task --------------------------------
         emerg_idx, emerg_y   = [], []
         hosp_idx,  hosp_y    = [], []
         sev_idx,   sev_y     = [], []
@@ -278,7 +217,6 @@ class TfidfBaselineEvaluator:
 
         metrics: dict = {}
 
-        # ---- Task 1: Emergency — text + ICD + complaint + ICU -----------
         metrics.update(self._binary_task(
             X_text      = [texts[i]      for i in emerg_idx],
             X_icd       = [icd_texts[i]  for i in emerg_idx],
@@ -288,7 +226,6 @@ class TfidfBaselineEvaluator:
             label       = "emergency_care_needed",
         ))
 
-        # ---- Task 2: Hospitalization (binary) — text + ICD + ICU --------
         metrics.update(self._binary_task(
             X_text      = [texts[i]      for i in hosp_idx],
             X_icd       = [icd_texts[i]  for i in hosp_idx],
@@ -298,7 +235,6 @@ class TfidfBaselineEvaluator:
             label       = "hospitalization_needed",
         ))
 
-        # ---- Task 3: Severity (3-class) — text + ICD + has_icu_stay -----
         metrics.update(self._multiclass_task(
             X_text = [texts[i]     for i in sev_idx],
             X_icd  = [icd_texts[i] for i in sev_idx],
@@ -308,7 +244,6 @@ class TfidfBaselineEvaluator:
             task_name = "severity",
         ))
 
-        # ---- Task 3: Cancer type — text + ICD ---------------------------
         metrics["cancer_type"] = self._cancer_type_task(
             X_text = [texts[i]     for i in cancer_idx],
             X_icd  = [icd_texts[i] for i in cancer_idx],
@@ -339,10 +274,6 @@ class TfidfBaselineEvaluator:
         save_tfidf_report(report)
         logger.info("[TFIDF] Report saved to MongoDB.")
         return report
-
-    # ------------------------------------------------------------------
-    # Task runners
-    # ------------------------------------------------------------------
 
     def _binary_task(
         self,
@@ -379,10 +310,7 @@ class TfidfBaselineEvaluator:
             X_complaint_te = [X_complaint[i] for i in idx_te] if X_complaint else None,
         )
 
-        # -- TruncatedSVD: reduce sparse TF-IDF → dense for GBM ----------
-        # HistGradientBoostingClassifier requires dense input. Full .toarray()
-        # on 22k×33k would use ~6 GB; SVD reduces to 300 latent components
-        # (~54 MB) while retaining the most discriminative variance.
+        # SVD: reduce sparse TF-IDF to dense for HistGBM (full .toarray() at 22k×33k ≈ 6 GB)
         n_components = min(300, X_tr_feat.shape[1] - 1)
         logger.info(
             "[GBM] Applying TruncatedSVD | sparse_features: %d → dense_components: %d",
@@ -403,7 +331,7 @@ class TfidfBaselineEvaluator:
             label, clf.n_iter_,
         )
 
-        # -- Youden-optimal threshold from training ROC curve --------------
+        # Youden-optimal threshold from the training ROC curve
         y_tr_scores = clf.predict_proba(X_tr_dense)[:, 1]
         fpr_tr, tpr_tr, thresh_tr = roc_curve(y_tr, y_tr_scores)
         j_scores   = tpr_tr - fpr_tr

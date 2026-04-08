@@ -1,20 +1,6 @@
-"""
-Diagnosis explainability module.
-
-SHAP-based implementation (active when cancer_agent_models.pkl is present):
-  - Severity  (LogisticRegression): linear attribution — feature_value × coef
-  - Emergency (HistGBM + TruncatedSVD): TreeSHAP values projected back through SVD
-    to recover word-level importances
-  - Cancer type (CalibratedClassifierCV→LinearSVC): linear attribution from
-    the first fold's underlying LinearSVC coefs
-
-Fallback to LLM-based explanation when:
-  - Model file not found (xai-validation-service/models/cancer_agent_models.pkl)
-  - Any SHAP computation error
-
-Model file is produced by:
-  services/cancer-agent/scripts/export_models.py
-"""
+# SHAP-based explainability for diagnosis decisions.
+# Uses cancer_agent_models.pkl (produced by cancer-agent/scripts/export_models.py) when available.
+# Falls back to LLM-based explanation if the model file is missing or any SHAP computation fails.
 
 import json
 import os
@@ -33,17 +19,11 @@ from core.config import OPENAI_MODEL
 from log.logger import logger
 
 
-# ---------------------------------------------------------------------------
-# Model file location
-# ---------------------------------------------------------------------------
-
 # Project root is 4 levels up from xai-validation-service/src/explainers/
 _MODEL_FILE = Path(__file__).resolve().parent.parent.parent.parent / "trained_model" / "cancer_agent_models.pkl"
 
 
-# ---------------------------------------------------------------------------
-# LLM fallback (unchanged from original implementation)
-# ---------------------------------------------------------------------------
+# LLM fallback
 
 _llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
 
@@ -80,9 +60,7 @@ def _llm_explain(symptoms: str, diagnosis_summary: str) -> list:
         return []
 
 
-# ---------------------------------------------------------------------------
-# Model loader (singleton, thread-safe)
-# ---------------------------------------------------------------------------
+# Model loader — singleton, thread-safe
 
 _models: dict[str, Any] | None = None
 _models_lock = threading.Lock()
@@ -124,9 +102,7 @@ def _load_models() -> dict[str, Any] | None:
         return _models
 
 
-# ---------------------------------------------------------------------------
 # SHAP attribution helpers
-# ---------------------------------------------------------------------------
 
 def _top_features(
     shap_vals: np.ndarray,
@@ -275,22 +251,9 @@ def _shap_cancer_type(models: dict, symptoms: str) -> list[dict]:
     return factors
 
 
-# ---------------------------------------------------------------------------
-# Public DiagnosisExplainer
-# ---------------------------------------------------------------------------
-
 class DiagnosisExplainer:
-    """
-    Provides explainability for AI diagnosis decisions.
-
-    Primary path (when cancer_agent_models.pkl is present):
-      - Severity: linear SHAP on LogisticRegression
-      - Emergency: TreeSHAP on HistGBM, projected back to word space
-      - Cancer type: linear SHAP on CalibratedClassifierCV(LinearSVC)
-
-    Fallback (pkl not found or any SHAP error):
-      - LLM-based explanation (original implementation)
-    """
+    """Computes SHAP-based explanations (severity/emergency/cancer-type models) when the model
+    file is present; falls back to LLM-based explanation otherwise."""
 
     def __init__(self):
         self.last_method: str = ""

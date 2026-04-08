@@ -1,16 +1,5 @@
-"""
-PubMed E-utilities fetcher for clinical guidelines.
-
-Fetches real guideline abstracts from PubMed (NCBI) at startup.
-Rate limit: 3 requests/second (no API key required).
-
-API used:
-  esearch: search PubMed for relevant PMIDs
-  efetch:  fetch abstracts for those PMIDs (XML)
-
-The fetched abstracts are stored in ChromaDB (clinical_guidelines collection)
-and retrieved via semantic search during constitutional guard critique.
-"""
+# Fetches clinical guideline abstracts from PubMed (NCBI E-utilities) at startup.
+# Rate limit: 3 req/s without an API key. Uses esearch (PMIDs) → efetch (XML abstracts).
 
 import time
 import xml.etree.ElementTree as ET
@@ -80,9 +69,6 @@ _GUIDELINE_QUERIES = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 def _search_pmids(query: str, max_results: int) -> list[str]:
     """Run esearch to get PMIDs for a query. Returns list of PMID strings."""
@@ -160,9 +146,6 @@ def _parse_efetch_xml(xml_text: str) -> list[dict]:
     return articles
 
 
-# ---------------------------------------------------------------------------
-# Public interface
-# ---------------------------------------------------------------------------
 
 def retrieve_guidelines() -> list[dict]:
     """

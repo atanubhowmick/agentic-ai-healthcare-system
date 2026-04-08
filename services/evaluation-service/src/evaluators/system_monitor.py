@@ -4,9 +4,8 @@ from log.logger import logger
 
 
 class SystemMonitor:
-    """
-    Tracks Response Time, Latency, and Throughput. [cite: 434, 435]
-    """
+    """Tracks response time, latency, and throughput across requests."""
+
     def __init__(self):
         self.request_times = []
 
@@ -16,10 +15,7 @@ class SystemMonitor:
         return latency
 
     def calculate_system_health(self, total_requests: int, failed_requests: int) -> dict:
-        # Failure rates: Predictions failed by XAI or Human
         failure_rate = (failed_requests / total_requests) * 100 if total_requests > 0 else 0
-
-        # Latency average
         avg_latency = (
             sum(self.request_times) / len(self.request_times)
             if self.request_times else 0

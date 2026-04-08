@@ -1,21 +1,6 @@
-"""
-Rule Repository — loads clinical safety rules into an in-memory cache at startup.
-
-Loading strategy (startup, not per-request):
-  Rules are static configuration. Loading once at startup into memory means
-  zero DB overhead per validation request. The cache can be refreshed on
-  demand if rules are updated in MongoDB without restarting the service.
-
-Loading sequence (first-wins):
-  1. MongoDB collection  xai_validation_rules  — primary source.
-     If the collection has documents, load all active rules from there.
-  2. JSON fallback       data/xai_validation_rules.json
-     If MongoDB is empty or unavailable, load from the bundled JSON file.
-     This keeps the service operational without a database connection.
-
-The JSON file is the canonical seed source — insert it manually via
-MongoDB Compass or mongoimport to populate the collection.
-"""
+# Loads clinical safety rules into an in-memory cache at startup.
+# Loading order: MongoDB (xai_validation_rules) → JSON file fallback (data/xai_validation_rules.json).
+# The cache can be refreshed on demand without restarting the service.
 
 from __future__ import annotations
 
@@ -35,9 +20,6 @@ _cache: list[dict] | None = None
 _JSON_SEED = Path(__file__).parent.parent.parent / "data" / "xai_validation_rules.json"
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 def _get_collection():
     from core.config import MONGODB_URI, MONGODB_DB_NAME
@@ -85,9 +67,6 @@ def _load_from_json() -> list[dict]:
         return []
 
 
-# ---------------------------------------------------------------------------
-# Public interface
-# ---------------------------------------------------------------------------
 
 def load_rules(refresh: bool = False) -> list[dict]:
     """

@@ -1,17 +1,3 @@
-"""
-XAI Validation Agent - DeepAgent-based implementation.
-
-Architecture:
-  - Uses deepagents.create_deep_agent (built on LangGraph) as the executor.
-  - @tool decorator exposes validation schema, medical rule checks, and explainability.
-  - The agent autonomously validates diagnoses and treatment recommendations.
-  - Session history and message construction are handled by validator_service.py.
-
-Public interface (used by validator_service.py):
-  xai_executor  - the raw DeepAgent instance
-  BASE_SYSTEM   - system prompt (used by service to build messages)
-"""
-
 from langchain.tools import tool
 from langchain_openai import ChatOpenAI
 from deepagents import create_deep_agent
@@ -21,8 +7,6 @@ from explainers.shap_provider import DiagnosisExplainer
 from explainers import context as explanation_context
 from log.logger import logger
 
-
-# -- JSON response schema -------------------------------------------------------
 
 _JSON_SCHEMA = """
 {
@@ -37,7 +21,6 @@ BASE_SYSTEM = (
     "You are a Clinical Safety Validator AI Agent. Your goal is to validate specialist AI "
     "diagnoses and treatment recommendations for clinical safety, consistency, and ethical soundness. "
 
-    # Severity scale context
     "IMPORTANT — Severity scale used in this system is derived from MIMIC clinical admission patterns: "
     "LOW = routine or elective discharge (patient stable, no emergency admission required); "
     "HIGH = hospital admission required; "
@@ -48,7 +31,6 @@ BASE_SYSTEM = (
     "because serious chronic or oncological symptoms are paired with LOW severity — this is "
     "clinically valid for outpatient or elective cases. "
 
-    # Fix 1 — broadened undertriage exception (principle-based, not symptom-list-based)
     "UNDERTRIAGE RULE: If the diagnosis itself describes an acute condition — including but not "
     "limited to STEMI, ACS, stroke, TIA, sepsis, septic shock, respiratory failure, pulmonary "
     "embolism, aortic dissection, meningitis, status epilepticus, haemodynamic instability, "
@@ -60,19 +42,16 @@ BASE_SYSTEM = (
     "this means the patient was admitted as an emergency. A severity=LOW with emergencyCareNeeded=NO "
     "assignment for an emergency admission is a strong undertriage signal — flag as REJECT or REVIEW. "
 
-    # Fix 3 — anchor decision on structured fields, not symptom phrasing
     "DECISION ANCHORING: Base your recommendation primarily on the structured diagnosis fields "
     "(severity, emergencyCareNeeded, hospitalizationNeeded) and the clinical content of the "
     "diagnosisDetails. Treat the free-text symptom description as secondary context only. "
     "Two descriptions of the same clinical condition must produce the same recommendation. "
 
-    # Fix 4 — readability: target both length and vocabulary
     "SUMMARY STYLE: Write validation_summary in plain language a nurse or junior doctor can read quickly. "
     "Maximum 2 short sentences. Use common English words — replace long Latin or Greek medical terms "
     "with plain alternatives where possible (e.g. 'heart attack' not 'myocardial infarction', "
     "'low oxygen' not 'hypoxia', 'fits' not 'seizures'). State the key finding and the safety conclusion only. "
 
-    # Sparsity — ensure key_concerns is always populated
     "KEY CONCERNS: Always populate key_concerns with 1–2 specific clinical observations. "
     "For APPROVE: state what was checked and found safe (e.g. 'Emergency care correctly flagged', "
     "'Severity consistent with outpatient oncology presentation'). "
@@ -91,19 +70,16 @@ BASE_SYSTEM = (
 )
 
 
-# -- Tools ----------------------------------------------------------------------
-
 @tool
 def get_validation_response_schema() -> str:
-    """Return the required JSON response schema for validation output.
-    Call this tool whenever you need a reminder of the exact JSON format expected."""
+    """Returns the expected JSON response schema for a validation output."""
     return _JSON_SCHEMA
 
 
 @tool
 def check_emergency_consistency(symptoms: str, severity: str, emergency_care: str) -> str:
     """Check that the emergency care decision is consistent with the patient symptoms and severity.
-    Returns a consistency verdict and explanation. Always call this tool for diagnosis validation.
+    Returns a consistency verdict and explanation. Always call this for diagnosis validation.
 
     Args:
         symptoms: Patient symptoms or clinical description text.
@@ -120,7 +96,7 @@ def check_emergency_consistency(symptoms: str, severity: str, emergency_care: st
 @tool
 def check_severity_validity(severity: str) -> str:
     """Validate that the severity value is a recognised clinical level (LOW/HIGH/CRITICAL).
-    Returns a validity verdict. Always call this tool for treatment validation.
+    Always call this for treatment validation.
 
     Args:
         severity: Severity level string to validate.
@@ -134,9 +110,8 @@ def check_severity_validity(severity: str) -> str:
 
 @tool
 def explain_diagnosis_factors(symptoms: str, diagnosis_summary: str) -> str:
-    """Identify the top contributing clinical factors for a diagnosis decision.
-    Returns a ranked list of factors with importance scores and direction.
-    Always call this tool when validating a diagnosis to provide explainability context.
+    """Identify the top contributing clinical factors for a diagnosis decision using SHAP or LLM.
+    Always call this when validating a diagnosis to provide explainability context.
 
     Args:
         symptoms: Patient symptoms or clinical presentation text.
@@ -158,13 +133,8 @@ def explain_diagnosis_factors(symptoms: str, diagnosis_summary: str) -> str:
     return "\n".join(lines)
 
 
-# -- LLM ------------------------------------------------------------------------
-
 logger.debug("Initializing XAI Validation LLM | model: %s", OPENAI_MODEL)
 _llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0, seed=42)
-
-
-# -- DeepAgent ------------------------------------------------------------------
 
 logger.debug("Building XAI Validation DeepAgent")
 xai_executor = create_deep_agent(

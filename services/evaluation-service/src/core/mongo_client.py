@@ -1,8 +1,4 @@
-"""
-Synchronous MongoDB client for the Evaluation Service.
-Provides helpers to persist and retrieve MIMIC-IV evaluation cases and
-TF-IDF evaluation reports.
-"""
+# Synchronous MongoDB client. Persists and retrieves MIMIC-IV evaluation cases and reports.
 
 import datetime
 from typing import Optional
@@ -16,10 +12,6 @@ from core.config import (
     MONGO_XAI_REPORT_COLLECTION, MONGO_URI,
 )
 from log.logger import logger
-
-# ---------------------------------------------------------------------------
-# Module-level client (lazy-initialised, reused across calls)
-# ---------------------------------------------------------------------------
 
 _client: Optional[MongoClient] = None
 
@@ -35,10 +27,6 @@ def _get_client() -> MongoClient:
 def _get_collection(name: str) -> Collection:
     return _get_client()[MONGO_DB][name]
 
-
-# ---------------------------------------------------------------------------
-# Evaluation cases — write
-# ---------------------------------------------------------------------------
 
 def save_evaluation_cases(records: list[dict]) -> int:
     """
@@ -74,10 +62,6 @@ def save_evaluation_cases(records: list[dict]) -> int:
     return result.upserted_count + result.modified_count
 
 
-# ---------------------------------------------------------------------------
-# Evaluation cases — read
-# ---------------------------------------------------------------------------
-
 def load_evaluation_cases(max_cases: int = 0) -> list[dict]:
     """
     Load evaluation records from MongoDB.
@@ -103,10 +87,6 @@ def count_evaluation_cases() -> int:
     return _get_collection(MONGO_EVAL_COLLECTION).count_documents({})
 
 
-# ---------------------------------------------------------------------------
-# TF-IDF baseline reports — write / read
-# ---------------------------------------------------------------------------
-
 def save_tfidf_report(report: dict) -> None:
     """Insert a TF-IDF baseline report with a UTC timestamp."""
     col = _get_collection(MONGO_TFIDF_REPORT_COLLECTION)
@@ -129,10 +109,6 @@ def has_tfidf_report() -> bool:
     """Return True if at least one TF-IDF baseline report exists."""
     return _get_collection(MONGO_TFIDF_REPORT_COLLECTION).count_documents({}, limit=1) > 0
 
-
-# ---------------------------------------------------------------------------
-# XAI evaluation reports — write / read
-# ---------------------------------------------------------------------------
 
 def save_xai_report(report: dict) -> None:
     """Insert an XAI evaluation report with a UTC timestamp."""

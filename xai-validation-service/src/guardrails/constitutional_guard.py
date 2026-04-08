@@ -1,28 +1,6 @@
-"""
-Constitutional Guard — principle-based self-critique and revision for clinical validation.
-
-Implements a custom critique→revision loop (NOT LangChain's deprecated ConstitutionalChain)
-using direct ChatOpenAI calls, consistent with the existing codebase pattern.
-
-Flow:
-  1. Receive raw agent JSON response string
-  2. Critique: ask LLM if any of the clinical safety principles are violated
-  3. If violations found: Revision: ask LLM to rewrite the JSON to comply
-  4. Validate JSON integrity of the revised output
-  5. Fall back to original if revision breaks JSON or produces an invalid structure
-
-Healthcare principles enforced:
-  P1 — Emergency conservatism:
-       CRITICAL severity must never be APPROVED without emergencyCareNeeded=YES
-  P2 — Epistemic humility:
-       Confidence score ≥ 0.9 should only be assigned when clinical evidence is unambiguous
-  P3 — Safety-first triage:
-       When emergency-level symptoms are present, downgrading severity to LOW requires
-       explicit clinical justification; default to REVIEW not APPROVE
-  P4 — Completeness requirement:
-       An APPROVE recommendation must include a non-empty validation_summary with
-       at least one specific clinical observation (not generic statements)
-"""
+# Principle-based critique→revision loop for clinical validation responses.
+# Uses direct ChatOpenAI calls (not LangChain's deprecated ConstitutionalChain).
+# Falls back to the original response if revision produces invalid JSON.
 
 import json
 from typing import Any
@@ -35,9 +13,7 @@ from guidelines.guideline_client import search_guidelines
 from log.logger import logger
 
 
-# ---------------------------------------------------------------------------
-# Constitutional principles
-# ---------------------------------------------------------------------------
+# Healthcare principles enforced by the critique loop
 
 _PRINCIPLES = [
     {
@@ -120,16 +96,10 @@ _REVISION_SYSTEM = (
     "Do not add any other keys. Do not wrap in markdown code fences."
 )
 
-# ---------------------------------------------------------------------------
-# LLM instance (same model as the agent for consistency)
-# ---------------------------------------------------------------------------
 
 _llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0, seed=42)
 
 
-# ---------------------------------------------------------------------------
-# Public interface
-# ---------------------------------------------------------------------------
 
 def _needs_critique(raw_response: str, severity: str, emergency_care: str) -> bool:
     """
@@ -209,9 +179,6 @@ def apply(
     return revised, critique
 
 
-# ---------------------------------------------------------------------------
-# Internal steps
-# ---------------------------------------------------------------------------
 
 def _build_guideline_context(symptoms: str, raw_response: str) -> str:
     """

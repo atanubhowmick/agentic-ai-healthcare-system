@@ -1,19 +1,8 @@
-"""
-Rule-based medical safety checks — fast, deterministic, no LLM required.
-
-These act as a lightweight pre-filter and are also exposed as LangChain @tools
-so the DeepAgent can call them explicitly during reasoning.
-
-Improvement 1: Expanded keyword lists and SpO2 pattern detection.
-The check_emergency_consistency function now covers a wider range of acute
-presentations, reducing false negatives on the safety net metric.
-"""
+# Fast, deterministic safety checks — no LLM required. Also exposed as LangChain @tools.
 
 import re
 
-# ---------------------------------------------------------------------------
 # SpO2 pattern (shared with rule_engine.py)
-# ---------------------------------------------------------------------------
 
 _SPO2_PATTERN = re.compile(
     r'(?:spo2|o2\s*sat(?:uration)?|oxygen\s*sat(?:uration)?|sats)\s*(?:of\s*|:\s*|=\s*)?<?(\d{1,3})\s*%?',
@@ -32,9 +21,7 @@ def _has_low_spo2(text: str) -> bool:
     return False
 
 
-# ---------------------------------------------------------------------------
-# Keyword lists — expanded to improve safety net coverage
-# ---------------------------------------------------------------------------
+# Keyword lists
 
 _CRITICAL_SYMPTOM_KEYWORDS = [
     # Cardiac
@@ -79,24 +66,12 @@ _EMERGENCY_SYMPTOM_KEYWORDS = [
 _VALID_SEVERITIES = {"LOW", "HIGH", "CRITICAL"}
 
 
-# ---------------------------------------------------------------------------
-# Public rule checks
-# ---------------------------------------------------------------------------
 
 def check_emergency_consistency(
     symptoms: str, severity: str, emergency_care: str
 ) -> tuple[bool, str]:
-    """
-    Verify that the emergency care decision is consistent with the symptoms and severity.
-
-    Checks:
-      1. Critical symptom keywords → emergency care must be YES.
-      2. CRITICAL severity → emergency care must be YES.
-      3. Emergency-level symptoms → severity must not be LOW.
-      4. SpO2 below 90% detected → severity must not be LOW.
-
-    Returns (is_consistent, message).
-    """
+    """Verify that the emergency care decision is consistent with the symptoms and severity.
+    Returns (is_consistent, message)."""
     symptoms_lower = symptoms.lower()
     emergency_upper = emergency_care.upper()
     severity_upper = severity.upper()

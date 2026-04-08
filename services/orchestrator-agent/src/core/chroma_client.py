@@ -1,13 +1,5 @@
-"""
-ChromaDB client for persisting and retrieving diagnosis and treatment outcomes.
-
-Two collections:
-  - diagnosis_outcomes : stores validated diagnoses (indexed by patient symptoms)
-  - treatment_outcomes : stores validated treatments (indexed by patient symptoms)
-
-The lookup at orchestration start searches treatment_outcomes for semantically
-similar cases. A cache hit short-circuits the full diagnosis/treatment pipeline.
-"""
+# ChromaDB client for diagnosis_outcomes and treatment_outcomes collections.
+# Lookup at start of each request; a cache hit short-circuits the full pipeline.
 
 import json
 from datetime import datetime, timezone
@@ -35,11 +27,7 @@ def _get_collections():
         chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
-        # When ChromaDB runs as an external HTTP server, langchain-chroma cannot
-        # get the distance metric from the collection metadata. So we supplied
-        # the relevance score function explicitly.
-        # text-embedding-3-small uses cosine distance (range 0–2); convert to
-        # similarity in [0, 1] with:  similarity = 1 - distance / 2
+        # cosine distance (0–2) → similarity (0–1): 1 - d/2
         def _cosine_relevance_score_fn(distance: float) -> float:
             return 1.0 - distance / 2.0
         
@@ -156,9 +144,8 @@ async def save_treatment_outcome(
 
     try:
         diagnosis_summary = (
-            diagnosis.get("diagnosysDetails") or   # cardiology typo preserved
-            diagnosis.get("diagnosisDetails") or
-            diagnosis.get("analysisDetails") or
+            diagnosis.get("diagnosisDetails") or   # cardiology / neurology / cancer
+            diagnosis.get("analysisDetails") or    # pathology
             str(diagnosis)
         )
         metadata = {

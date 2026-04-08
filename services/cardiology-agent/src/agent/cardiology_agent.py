@@ -1,16 +1,3 @@
-"""
-Cardiology Agent - DeepAgent-based implementation.
-
-Architecture:
-  - Uses deepagents.create_deep_agent (built on LangGraph) as the executor.
-  - @tool decorator exposes the response schema to the agent.
-  - SystemMessage / HumanMessage used for explicit message construction.
-
-Public interface (used by cardiology_service.py):
-  cardiology_executor  - the raw DeepAgent instance
-  BASE_SYSTEM          - system prompt (used by service to build messages)
-"""
-
 from langchain.tools import tool
 from langchain_openai import ChatOpenAI
 from deepagents import create_deep_agent
@@ -19,11 +6,9 @@ from core.config import OPENAI_MODEL
 from log.logger import logger
 
 
-# -- JSON response schema -------------------------------------------------------
-
 _JSON_SCHEMA = """
 {
-    "diagnosysDetails": "Detailed cardiac assessment within 200 words",
+    "diagnosisDetails": "Detailed cardiac assessment within 200 words",
     "severity": "LOW/HIGH/CRITICAL",
     "hospitalizationNeeded": "YES/NO",
     "emergencyCareNeeded": "YES/NO",
@@ -43,22 +28,14 @@ BASE_SYSTEM = (
 )
 
 
-# -- Tools ----------------------------------------------------------------------
-
 @tool
 def get_cardiology_response_schema() -> str:
-    """Return the required JSON response schema for cardiology diagnosis output.
-    Call this tool whenever you need a reminder of the exact JSON format expected."""
+    """Returns the expected JSON response schema for a cardiology diagnosis."""
     return _JSON_SCHEMA
 
 
-# -- LLM ------------------------------------------------------------------------
-
 logger.debug("Initializing Cardiology LLM | model: %s", OPENAI_MODEL)
 _llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
-
-
-# -- DeepAgent ------------------------------------------------------------------
 
 logger.debug("Building Cardiology DeepAgent")
 cardiology_executor = create_deep_agent(

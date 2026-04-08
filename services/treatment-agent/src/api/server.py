@@ -12,7 +12,7 @@ async def recommend_treatment(request: TreatmentRequest) -> GenericResponse[Trea
         "Received /recommend request | patient_id: %s | is_followup: %s",
         request.patient_id, request.is_followup,
     )
-    treatment_response = recommend(request)
+    treatment_response = await recommend(request)
     logger.debug(
         "Returning treatment plan for patient %s | urgency: %s",
         request.patient_id, treatment_response.treatment.urgency,

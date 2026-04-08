@@ -1,16 +1,3 @@
-"""
-Pathology Agent - DeepAgent-based implementation.
-
-Architecture:
-  - Uses deepagents.create_deep_agent (built on LangGraph) as the executor.
-  - @tool decorator exposes the response schema to the agent.
-  - SystemMessage / HumanMessage used for explicit message construction.
-
-Public interface (used by pathology_service.py):
-  pathology_executor  - the raw DeepAgent instance
-  BASE_SYSTEM         - system prompt (used by service to build messages)
-"""
-
 from langchain.tools import tool
 from langchain_openai import ChatOpenAI
 from deepagents import create_deep_agent
@@ -18,8 +5,6 @@ from deepagents import create_deep_agent
 from core.config import OPENAI_MODEL
 from log.logger import logger
 
-
-# -- JSON response schema -------------------------------------------------------
 
 _JSON_SCHEMA = """
 {
@@ -43,22 +28,14 @@ BASE_SYSTEM = (
 )
 
 
-# -- Tools ----------------------------------------------------------------------
-
 @tool
 def get_pathology_response_schema() -> str:
-    """Return the required JSON response schema for pathology analysis output.
-    Call this tool whenever you need a reminder of the exact JSON format expected."""
+    """Returns the expected JSON response schema for a pathology analysis."""
     return _JSON_SCHEMA
 
 
-# -- LLM ------------------------------------------------------------------------
-
 logger.debug("Initializing Pathology LLM | model: %s", OPENAI_MODEL)
 _llm = ChatOpenAI(model=OPENAI_MODEL, temperature=0)
-
-
-# -- DeepAgent ------------------------------------------------------------------
 
 logger.debug("Building Pathology DeepAgent")
 pathology_executor = create_deep_agent(

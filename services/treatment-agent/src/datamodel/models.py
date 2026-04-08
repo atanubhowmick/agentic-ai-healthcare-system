@@ -26,8 +26,6 @@ class TreatmentResponse(BaseModel):
     treatment: TreatmentResult
 
 
-# -- Generic response wrapper (same pattern as all other agents) --------------
-
 T = TypeVar("T")
 
 

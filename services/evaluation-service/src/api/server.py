@@ -15,16 +15,10 @@ async def health() -> dict:
     return {"status": "ok", "service": "evaluation-service"}
 
 
-# ---------------------------------------------------------------------------
-# TF-IDF baseline endpoints
-# ---------------------------------------------------------------------------
-
 @router.post("/evaluate/tfidf-baseline", response_model=GenericResponse[dict])
 async def trigger_tfidf_evaluation(request: TfidfBaselineRequest) -> GenericResponse[dict]:
     """
-    Trigger a TF-IDF baseline evaluation.
-    Trains TF-IDF + classifier on (1-test_size) fraction of MIMIC eval cases and
-    reports metrics on the held-out test_size fraction (default 80:20 split).
+    Trigger a TF-IDF baseline evaluation (80:20 train/test split by default).
     Runs in a background thread; poll /evaluate/tfidf-baseline/status for progress.
     """
     logger.debug("[API] POST /evaluate/tfidf-baseline | max_cases=%s | test_size=%.0f%%",
@@ -54,22 +48,13 @@ async def get_tfidf_report() -> GenericResponse[dict]:
     return GenericResponse.success(report)
 
 
-# ---------------------------------------------------------------------------
-# XAI evaluation endpoints
-# ---------------------------------------------------------------------------
 
 @router.post("/evaluate/xai", response_model=GenericResponse[dict])
 async def trigger_xai_evaluation(request: XaiEvaluationRequest) -> GenericResponse[dict]:
     """
-    Trigger an XAI validation service evaluation.
-
-    Builds correct and under-triage diagnosis payloads from MIMIC evaluation cases
-    and calls the XAI service to measure:
-      - Option 1: Validation decision accuracy (approval rate for correct diagnoses)
-      - Option 2: Safety net effectiveness (under-triage detection sensitivity)
-      - Option 4: Rule engine coverage (% handled by deterministic rules vs LLM)
-      - Option 6: Over-rejection rate (false positive REJECT rate for correct diagnoses)
-
+    Trigger an XAI evaluation measuring decision accuracy, safety net effectiveness,
+    rule coverage, over-rejection rate, and XAI quality metrics (stability, fidelity,
+    consistency, sparsity, interpretability).
     Runs in a background thread; poll /evaluate/xai/status for progress.
     """
     logger.debug(
