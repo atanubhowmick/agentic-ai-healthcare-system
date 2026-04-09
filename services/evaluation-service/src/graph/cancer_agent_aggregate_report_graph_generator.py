@@ -38,13 +38,11 @@ plt.rcParams.update({
     "legend.fontsize": _LEGEND_FONTSIZE,
 })
 
-
 def _add_border(ax: plt.Axes) -> None:
     for spine in ax.spines.values():
         spine.set_visible(True)
         spine.set_linewidth(_BORDER_WIDTH)
         spine.set_color(_BORDER_COLOR)
-
 
 def _label_bars(ax: plt.Axes, fmt: str = "{:.4f}") -> None:
     """Annotate each bar with its numeric value."""
@@ -57,11 +55,6 @@ def _label_bars(ax: plt.Axes, fmt: str = "{:.4f}") -> None:
                 fmt.format(h),
                 ha="center", va="bottom", fontsize=_BAR_LABEL_FONTSIZE,
             )
-
-
-# ---------------------------------------------------------------------------
-# Plot-1: Accuracy Comparison
-# ---------------------------------------------------------------------------
 
 def generate_accuracy_comparison(metrics: dict, run_dir: str) -> None:
     emerg  = metrics.get("emergency_care_needed", {})
@@ -91,11 +84,6 @@ def generate_accuracy_comparison(metrics: dict, run_dir: str) -> None:
                 dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("[CANCER_AGG_GRAPH] plot1_accuracy_comparison.png saved")
-
-
-# ---------------------------------------------------------------------------
-# Plot-2: ROC-AUC Comparison
-# ---------------------------------------------------------------------------
 
 def generate_roc_auc_comparison(metrics: dict, run_dir: str) -> None:
     emerg  = metrics.get("emergency_care_needed", {})
@@ -131,17 +119,11 @@ def generate_roc_auc_comparison(metrics: dict, run_dir: str) -> None:
     plt.close(fig)
     logger.info("[CANCER_AGG_GRAPH] plot2_roc_auc_comparison.png saved")
 
-
-# ---------------------------------------------------------------------------
-# Plot-3: F1 Comparison (grouped: Emergency / Hospitalization / Severity / Cancer)
-# ---------------------------------------------------------------------------
-
 def _precision_from_cm(task: dict) -> float:
     """Derive precision from stored confusion matrix: tp / (tp + fp)."""
     cm = task.get("confusion_matrix", {})
     tp, fp = cm.get("tp", 0), cm.get("fp", 0)
     return round(tp / (tp + fp), 4) if (tp + fp) > 0 else 0.0
-
 
 def _macro_pr_from_per_class(task: dict) -> tuple[float, float]:
     """Macro-average precision and recall across all stored classes."""
@@ -152,8 +134,6 @@ def _macro_pr_from_per_class(task: dict) -> tuple[float, float]:
     prec = round(sum(c.get("precision", 0) for c in classes) / len(classes), 4)
     rec  = round(sum(c.get("recall",    0) for c in classes) / len(classes), 4)
     return prec, rec
-
-
 
 def generate_f1_comparison(metrics: dict, run_dir: str) -> None:
     emerg  = metrics.get("emergency_care_needed", {})
@@ -205,11 +185,6 @@ def generate_f1_comparison(metrics: dict, run_dir: str) -> None:
     plt.close(fig)
     logger.info("[CANCER_AGG_GRAPH] plot3_f1_comparison.png saved")
 
-
-# ---------------------------------------------------------------------------
-# Plot-4: Sensitivity vs Specificity (grouped bar)
-# ---------------------------------------------------------------------------
-
 def generate_sensitivity_specificity(metrics: dict, run_dir: str) -> None:
     emerg = metrics.get("emergency_care_needed", {})
     hosp  = metrics.get("hospitalization_needed", {})
@@ -236,11 +211,6 @@ def generate_sensitivity_specificity(metrics: dict, run_dir: str) -> None:
                 dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("[CANCER_AGG_GRAPH] plot4_sensitivity_specificity.png saved")
-
-
-# ---------------------------------------------------------------------------
-# Plot-5: Severity Class Performance (Precision / Recall / F1 per class)
-# ---------------------------------------------------------------------------
 
 def generate_severity_class_performance(metrics: dict, run_dir: str) -> None:
     per_class = metrics.get("severity", {}).get("per_class", {})
@@ -271,11 +241,6 @@ def generate_severity_class_performance(metrics: dict, run_dir: str) -> None:
     plt.close(fig)
     logger.info("[CANCER_AGG_GRAPH] plot5_severity_class_performance.png saved")
 
-
-# ---------------------------------------------------------------------------
-# Plot-6: Cancer Type Distribution (support per class)
-# ---------------------------------------------------------------------------
-
 def generate_cancer_type_distribution(metrics: dict, run_dir: str) -> None:
     per_class = metrics.get("cancer_type", {}).get("per_class", {})
     if not per_class:
@@ -304,11 +269,6 @@ def generate_cancer_type_distribution(metrics: dict, run_dir: str) -> None:
                 dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("[CANCER_AGG_GRAPH] plot6_cancer_type_distribution.png saved")
-
-
-# ---------------------------------------------------------------------------
-# Public entry point
-# ---------------------------------------------------------------------------
 
 def generate_cancer_agent_aggregate_report_graphs(
     output_dir: str = CANCER_AGENT_AGGREGATE_REPORT_PLOTS_DIR,
@@ -349,12 +309,9 @@ def generate_cancer_agent_aggregate_report_graphs(
     logger.info("[CANCER_AGG_GRAPH] 6 aggregate charts saved to '%s'", run_dir)
     print(f"Cancer agent aggregate graphs saved in folder: {run_dir}")
 
-
-# ---------------------------------------------------------------------------
 # Standalone usage:
 #   python graph/cancer_agent_aggregate_report_graph_generator.py
 #   python graph/cancer_agent_aggregate_report_graph_generator.py --output-dir my_plots
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Generate cancer agent aggregate evaluation charts from the latest MongoDB report."

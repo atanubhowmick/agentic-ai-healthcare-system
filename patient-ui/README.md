@@ -7,13 +7,13 @@ Patient-facing Streamlit web application — port **8021**. Provides a two-page 
 ## How It Works
 
 ```
-Patient Check-in (Patient ID + Name)
+Patient Check-in (Patient ID, Name, Gender, Age Group)
         │
         ▼
-Diagnosis Page - symptom text area (max 2 000 chars)
+Diagnosis Page — symptom text area (max 1 000 characters)
         │  POST /orchestrator/diagnose
         ▼
-Diagnosis Report card
+Diagnosis Report
   ├── Status badge (COMPLETED / HUMAN_REVIEW_REQUIRED)
   ├── Severity + Emergency / Hospitalisation flags
   ├── Diagnosis Summary + Full Details (expandable)
@@ -23,13 +23,15 @@ Diagnosis Report card
   └── Audit Trail (expandable)
 ```
 
+Gender and age group collected at check-in are prepended to the symptom text before sending to the Orchestrator, giving the specialist agents richer context.
+
 ---
 
 ## Pages
 
 | Page | File | Description |
 |------|------|-------------|
-| **Patient Check-in** | `pages/1_patient_login.py` | Entry point — captures Patient ID and Full Name before proceeding |
+| **Patient Check-in** | `pages/1_patient_login.py` | Captures Patient ID, Full Name, Gender, and Age Group before proceeding |
 | **Diagnosis** | `pages/2_diagnosis.py` | Symptom input form; calls the Orchestrator and renders the full structured report |
 
 ---
@@ -48,17 +50,14 @@ Diagnosis Report card
 ```bash
 cd patient-ui
 
-# Create and activate virtual environment
 python -m venv venv
 source venv/Scripts/activate   # Windows Git Bash
+# source venv/bin/activate     # Linux / macOS
 
-# Install dependencies
 pip install -r requirements.txt
 
-# Start the app (port 8021)
 bash run.sh
-
-# Or with Streamlit directly
+# or directly:
 streamlit run app.py --server.port 8021 --server.address 127.0.0.1
 ```
 

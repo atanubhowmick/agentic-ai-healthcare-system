@@ -1,48 +1,10 @@
-"""
-MIMIC-IV → Cancer Agent Label Mapper
-======================================
-Maps MIMIC-IV evaluation set ground truth fields to the Cancer Agent's DiagnosisResult
-schema so they can be compared for evaluation.
-
-Ground truth derivation rules
-------------------------------
-severity (LOW / HIGH / CRITICAL / UNKNOWN)
-    Inherited directly from load_mimic_data._infer_severity():
-        DIED / EXPIRED / HOSPICE   → CRITICAL
-        REHAB / SKILLED / ACUTE /
-        FACILITY / TRANSFER        → HIGH
-        everything else            → LOW
-        missing / unknown          → UNKNOWN  (excluded from metrics)
-
-hospitalizationNeeded (YES / NO)
-    Derived from ICU/admission-based severity (set during extraction):
-    CRITICAL or HIGH → YES
-    LOW              → NO
-    UNKNOWN          → None  (excluded)
-
-emergencyCareNeeded (YES / NO)
-    Primary:  admission_type in _EMERGENCY_ADMISSION_TYPES     → YES
-              admission_type in _NON_EMERGENCY_ADMISSION_TYPES → NO
-              (covers all 9 MIMIC-IV v3.1 admission_type values)
-    Fallback (admission_type missing or unrecognised):
-              CRITICAL                        → YES
-              LOW                             → NO
-              HIGH + emergency keyword in CC  → YES
-              HIGH, no keyword                → NO
-    UNKNOWN                                  → None (excluded)
-
-cancer_type accuracy
-    Normalised category match (broad ICD title → simplified label)
-    OR fuzzy token similarity ≥ threshold 0.30 (difflib.SequenceMatcher, stdlib only)
-"""
+# Maps MIMIC-IV evaluation records to Cancer Agent DiagnosisResult ground truth labels.
+# severity: DIED/HOSPICE → CRITICAL, REHAB/TRANSFER → HIGH, else LOW (UNKNOWN excluded).
+# emergencyCareNeeded: primary = admission_type; fallback = severity + keyword heuristic.
+# cancer_type: normalised ICD category match or fuzzy similarity ≥ 0.30.
 
 import re
 from difflib import SequenceMatcher
-
-# ---------------------------------------------------------------------------
-# MIMIC-IV v3.1 admission_type values that indicate emergency presentation.
-# Covers all distinct values in physionet-data.mimiciv_3_1_hosp.admissions.
-# ---------------------------------------------------------------------------
 
 _EMERGENCY_ADMISSION_TYPES: frozenset[str] = frozenset({
     "EMERGENCY",
@@ -59,10 +21,7 @@ _NON_EMERGENCY_ADMISSION_TYPES: frozenset[str] = frozenset({
     "SURGICAL SAME DAY ADMISSION",
 })
 
-# ---------------------------------------------------------------------------
-# Emergency keyword set  (aligned with xai-validation-service/medical_rules.py)
-# ---------------------------------------------------------------------------
-
+# Aligned with xai-validation-service/medical_rules.py
 _EMERGENCY_KEYWORDS: frozenset[str] = frozenset({
     "cardiac arrest", "heart attack", "myocardial infarction", " mi ",
     "stroke", "aneurysm", "sepsis", "respiratory failure",
@@ -72,12 +31,7 @@ _EMERGENCY_KEYWORDS: frozenset[str] = frozenset({
     "bowel obstruction", "spinal cord compression",
 })
 
-# ---------------------------------------------------------------------------
-# Broad cancer category normalisation map
-# ICD long titles contain verbose phrases; map to simplified labels that
-# overlap with the cancer agent's suspectedCancerType output.
-# ---------------------------------------------------------------------------
-
+# ICD long titles → simplified labels matching the cancer agent's suspectedCancerType output.
 _CANCER_CATEGORY_MAP: dict[str, str] = {
     "lung":          "Lung Cancer",
     "bronch":        "Lung Cancer",

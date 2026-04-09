@@ -35,13 +35,11 @@ plt.rcParams.update({
     "legend.fontsize": _LEGEND_FONTSIZE,
 })
 
-
 def _add_border(ax: plt.Axes) -> None:
     for spine in ax.spines.values():
         spine.set_visible(True)
         spine.set_linewidth(_BORDER_WIDTH)
         spine.set_color(_BORDER_COLOR)
-
 
 def _extract_arrays(per_case_rows: list[dict]):
     """Return (y_true, y_score, y_pred) numpy arrays from stored per-case rows."""
@@ -49,11 +47,6 @@ def _extract_arrays(per_case_rows: list[dict]):
     y_score = np.array([r["score"]            for r in per_case_rows], dtype=float)
     y_pred  = np.array([r["predicted_label"]  for r in per_case_rows], dtype=int)
     return y_true, y_score, y_pred
-
-
-# ---------------------------------------------------------------------------
-# Individual chart generators
-# ---------------------------------------------------------------------------
 
 def _generate_confusion_matrix(cm_data: dict, title: str, filename: str, run_dir: str) -> None:
     tn = cm_data.get("tn", 0)
@@ -87,7 +80,6 @@ def _generate_confusion_matrix(cm_data: dict, title: str, filename: str, run_dir
     plt.close(fig)
     logger.info("[CANCER_STAT_GRAPH] %s saved", filename)
 
-
 def _generate_roc_curve(per_case_rows: list[dict], title: str, filename: str, run_dir: str) -> None:
     from sklearn.metrics import roc_auc_score, roc_curve
 
@@ -119,7 +111,6 @@ def _generate_roc_curve(per_case_rows: list[dict], title: str, filename: str, ru
     plt.close(fig)
     logger.info("[CANCER_STAT_GRAPH] %s saved", filename)
 
-
 def _generate_pr_curve(per_case_rows: list[dict], title: str, filename: str, run_dir: str) -> None:
     from sklearn.metrics import average_precision_score, precision_recall_curve
 
@@ -149,11 +140,6 @@ def _generate_pr_curve(per_case_rows: list[dict], title: str, filename: str, run
     fig.savefig(os.path.join(run_dir, filename), dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("[CANCER_STAT_GRAPH] %s saved", filename)
-
-
-# ---------------------------------------------------------------------------
-# Public entry point
-# ---------------------------------------------------------------------------
 
 def generate_cancer_agent_statistical_report_graphs(
     output_dir: str = CANCER_AGENT_STATISTICAL_REPORT_PLOTS_DIR,
@@ -253,12 +239,9 @@ def generate_cancer_agent_statistical_report_graphs(
     logger.info("[CANCER_STAT_GRAPH] Statistical charts saved to '%s'", run_dir)
     print(f"Cancer agent statistical charts saved in folder: {run_dir}")
 
-
-# ---------------------------------------------------------------------------
 # Standalone usage:
 #   python graph/cancer_agent_statistical_report_graph_generator.py
 #   python graph/cancer_agent_statistical_report_graph_generator.py --output-dir my_plots
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Generate cancer agent statistical charts from the latest MongoDB report."

@@ -22,7 +22,8 @@ A multi-agent AI system for clinical decision support, built with FastAPI and La
 | 7 | **XAI Validation Service** | LLM-based clinical safety validation with rule-based checks and SHAP explainability | 8016 |
 | 8 | **Evaluation Service** | System monitoring and metrics calculation | 8017 |
 | 9 | **ChromaDB** | Externalized vector store - shared by all agents for RAG and semantic caching | 8020 |
-| 10 | **Patient UI** | Streamlit patient-facing web app - check-in, symptom input, and diagnosis report | 8021 |
+| 10 | **MongoDB** | Persistent storage - completed patient cases and evaluation reports | 27017 |
+| 11 | **Patient UI** | Streamlit patient-facing web app - check-in, symptom input, and diagnosis report | 8021 |
 
 ---
 
@@ -58,8 +59,8 @@ Each service has its own detailed README covering API endpoints, implementation 
 | Treatment Agent | [README.md](services/treatment-agent/README.md) |
 | Orchestrator Agent | [README.md](services/orchestrator-agent/README.md) |
 | XAI Validation Service | [README.md](xai-validation-service/README.md) |
-| Evaluation Service | [EVALUATION_SERVICE_README.md](services/evaluation-service/EVALUATION_SERVICE_README.md) |
-| Patient UI | [PATIENT_UI_README.md](patient-ui/PATIENT_UI_README.md) |
+| Evaluation Service | [README.md](services/evaluation-service/README.md) |
+| Patient UI | [README.md](patient-ui/README.md) |
 
 ---
 

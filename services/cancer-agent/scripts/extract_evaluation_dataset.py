@@ -1,27 +1,18 @@
-"""
-MIMIC-IV Cancer Cases - Evaluation Dataset Extractor
-======================================================
-Extracts an evaluation test set from MIMIC-IV v3.1 for evaluating the Cancer Agent.
-
-Loads all available cancer cases (no subject_id split filter).
-
-The training loader (load_mimic_data.py) does not apply a split filter, so there
-is potential overlap for subject_ids divisible by 5.  For a clean split, re-run
-load_mimic_data.py with the additional WHERE clause:
-    AND MOD(CAST(d.subject_id AS INT64), 5) != 0
-
-Output: MongoDB collection  (agentic_ai_healthcare_db.mimic_evaluation_cases)
-Each record mirrors the ChromaDB metadata structure so it can be consumed
-directly by the evaluation pipeline.
-
-Usage
------
-# Extract up to 2000 evaluation cases:
-python extract_evaluation_dataset.py --project MY-GCP-PROJECT --limit 2000
-
-# Dry-run (fetch 20 rows, print, do not save):
-python extract_evaluation_dataset.py --project MY-GCP-PROJECT --dry-run
-"""
+# Extracts MIMIC-IV cancer cases from BigQuery and saves them to MongoDB (mimic_evaluation_cases).
+# The collection is consumed by two evaluation pipelines in the evaluation-service:
+#   - TF-IDF baseline evaluator  : trains HistGBM / LogisticRegression / LinearSVC classifiers
+#   - XAI evaluator              : sends cases through the XAI validation service for metrics
+#
+# SQL includes admission_type and has_icu_stay (via ICU join), which load_mimic_data.py omits.
+# These extra columns enable more reliable ground truth severity labels for both pipelines.
+#
+# Note: load_mimic_data.py excludes subject_ids where MOD(subject_id, 5) = 0.
+# This script has no split filter, so those subject_ids appear only here.
+# Re-enable the MOD filter in load_mimic_data.py for a clean train/eval split.
+#
+# Usage:
+#   python extract_evaluation_dataset.py --project MY-GCP-PROJECT --limit 2000
+#   python extract_evaluation_dataset.py --project MY-GCP-PROJECT --dry-run
 
 import argparse
 import os

@@ -8,7 +8,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# -- Page-specific CSS --------------------------------------------------------
 st.markdown(
     """
     <style>
@@ -36,7 +35,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# -- Session state init --------------------------------------------------------
 if "patient_id" not in st.session_state:
     st.session_state.patient_id = ""
 if "patient_name" not in st.session_state:
@@ -46,10 +44,8 @@ if "patient_gender" not in st.session_state:
 if "patient_age_group" not in st.session_state:
     st.session_state.patient_age_group = ""
 
-# -- Banner --------------------------------------------------------------------
 render_banner()
 
-# -- Centered form card --------------------------------------------------------
 _, col, _ = st.columns([1, 2, 1])
 
 with col:
@@ -76,13 +72,17 @@ with col:
         with col_gender:
             gender = st.selectbox(
                 "Gender",
-                options=["", "Male", "Female"],
+                options=["Male", "Female"],
+                index=None,
+                placeholder="Select gender",
                 help="Select your gender",
             )
         with col_age:
             age_group = st.selectbox(
                 "Age Group",
-                options=[""] + _age_groups,
+                options=_age_groups,
+                index=None,
+                placeholder="Select age group",
                 help="Select your age group (no exact age required)",
             )
         submitted = st.form_submit_button("Continue →", use_container_width=True)
