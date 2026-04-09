@@ -18,7 +18,6 @@ from core.config import XAI_VALIDATION_AGGREGATE_REPORT_PLOTS_DIR
 from core.mongo_client import load_latest_xai_report
 from log.logger import logger 
 
-
 _DPI = 300
 _SUPTITLE_FONTSIZE = 15
 _PANEL_LABEL_FONTSIZE = 14
@@ -37,7 +36,6 @@ plt.rcParams.update({
     "legend.fontsize": _LEGEND_FONTSIZE,
 })
 
-
 def _add_panel_border(ax: plt.Axes) -> None:
     """Draw a visible border around a single panel (all four spines)."""
     for spine in ax.spines.values():
@@ -45,11 +43,8 @@ def _add_panel_border(ax: plt.Axes) -> None:
         spine.set_linewidth(_BORDER_WIDTH)
         spine.set_color(_BORDER_COLOR)
 
-
-# ---------------------------------------------------------------------------
 # Individual panel draw helpers
 # Each helper draws into a supplied Axes object (no plt.figure() calls).
-# ---------------------------------------------------------------------------
 
 def _draw_decision_performance(ax: plt.Axes, payload: dict) -> None:
     approval_accuracy = payload["decision_accuracy"]["approval_accuracy"]
@@ -66,7 +61,6 @@ def _draw_decision_performance(ax: plt.Axes, payload: dict) -> None:
     ax.set_ylabel("Score")
     _add_panel_border(ax)
 
-
 def _draw_safety_detection(ax: plt.Axes, payload: dict) -> None:
     sensitivity = payload["safety_net_effectiveness"]["sensitivity"]
     miss_rate   = payload["safety_net_effectiveness"]["miss_rate"]
@@ -76,7 +70,6 @@ def _draw_safety_detection(ax: plt.Axes, payload: dict) -> None:
                  fontsize=_PANEL_LABEL_FONTSIZE)
     ax.set_ylabel("Score")
     _add_panel_border(ax)
-
 
 def _draw_rule_vs_llm_pie(ax: plt.Axes, payload: dict) -> None:
     rule_rate = payload["rule_engine_coverage"]["rule_coverage_rate"]
@@ -91,7 +84,6 @@ def _draw_rule_vs_llm_pie(ax: plt.Axes, payload: dict) -> None:
                  fontweight=_PANEL_LABEL_WEIGHT, fontsize=_PANEL_LABEL_FONTSIZE)
     _add_panel_border(ax)
 
-
 def _draw_rule_hits_vs_llm(ax: plt.Axes, payload: dict) -> None:
     rule_hits = payload["rule_engine_coverage"]["rule_engine_hit"]
     llm_cases = payload["rule_engine_coverage"]["rule_engine_miss_llm_path"]
@@ -100,7 +92,6 @@ def _draw_rule_hits_vs_llm(ax: plt.Axes, payload: dict) -> None:
                  fontsize=_PANEL_LABEL_FONTSIZE)
     ax.set_ylabel("Cases")
     _add_panel_border(ax)
-
 
 def _draw_explanation_complexity(ax: plt.Axes, payload: dict) -> None:
     dist   = payload["xai_sparsity"]["key_concerns_distribution"]
@@ -113,7 +104,6 @@ def _draw_explanation_complexity(ax: plt.Axes, payload: dict) -> None:
     ax.set_xlabel("Number of Key Concerns")
     _add_panel_border(ax)
 
-
 def _draw_readability_distribution(ax: plt.Axes, payload: dict) -> None:
     read_dist = payload["xai_interpretability"]["score_distribution"]
     labels    = list(read_dist.keys())
@@ -124,7 +114,6 @@ def _draw_readability_distribution(ax: plt.Axes, payload: dict) -> None:
                  fontsize=_PANEL_LABEL_FONTSIZE)
     ax.set_ylabel("Frequency")
     _add_panel_border(ax)
-
 
 def _draw_fidelity_comparison(ax: plt.Axes, payload: dict) -> None:
     decision_sensitivity = payload["xai_fidelity"]["decision_sensitivity_rate"]
@@ -139,7 +128,6 @@ def _draw_fidelity_comparison(ax: plt.Axes, payload: dict) -> None:
                  fontweight=_PANEL_LABEL_WEIGHT, fontsize=_PANEL_LABEL_FONTSIZE)
     ax.set_ylabel("Score")
     _add_panel_border(ax)
-
 
 def _draw_reliability_radar(ax: plt.Axes, payload: dict) -> None:
     metrics = {
@@ -164,7 +152,6 @@ def _draw_reliability_radar(ax: plt.Axes, payload: dict) -> None:
     ax.spines["polar"].set_linewidth(_BORDER_WIDTH)
     ax.spines["polar"].set_color(_BORDER_COLOR)
 
-
 def _draw_stability_analysis(ax: plt.Axes, payload: dict) -> None:
     stable   = payload["xai_stability"]["stable_cases"]
     unstable = payload["xai_stability"]["unstable_cases"]
@@ -173,7 +160,6 @@ def _draw_stability_analysis(ax: plt.Axes, payload: dict) -> None:
                  fontsize=_PANEL_LABEL_FONTSIZE)
     ax.set_ylabel("Cases")
     _add_panel_border(ax)
-
 
 def _draw_consistency_pie(ax: plt.Axes, payload: dict) -> None:
     consistent   = payload["xai_consistency"]["consistent"]
@@ -187,11 +173,6 @@ def _draw_consistency_pie(ax: plt.Axes, payload: dict) -> None:
     ax.set_title("(B) Consistency Analysis", fontweight=_PANEL_LABEL_WEIGHT,
                  fontsize=_PANEL_LABEL_FONTSIZE)
     _add_panel_border(ax)
-
-
-# ---------------------------------------------------------------------------
-# Collage builders
-# ---------------------------------------------------------------------------
 
 def _build_collage_a(payload: dict, run_dir: str) -> None:
     """Decision & Safety Performance — 2×2 grid of 4 panels."""
@@ -208,7 +189,6 @@ def _build_collage_a(payload: dict, run_dir: str) -> None:
     fig.savefig(os.path.join(run_dir, "A_decision_safety_performance.png"),
                 dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
-
 
 def _build_collage_b(payload: dict, run_dir: str) -> None:
     """Explainability & Interpretation — 2x2 grid, B4 uses polar axes."""
@@ -233,7 +213,6 @@ def _build_collage_b(payload: dict, run_dir: str) -> None:
                 dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
 
-
 def _build_collage_c(payload: dict, run_dir: str) -> None:
     """Robustness & Stability — 1x2 grid of 2 panels."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 6), dpi=_DPI)
@@ -247,11 +226,6 @@ def _build_collage_c(payload: dict, run_dir: str) -> None:
     fig.savefig(os.path.join(run_dir, "C_robustness_stability.png"),
                 dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
-
-
-# ---------------------------------------------------------------------------
-# Public entry point
-# ---------------------------------------------------------------------------
 
 def generate_xai_aggregate_report_graphs(output_dir: str = XAI_VALIDATION_AGGREGATE_REPORT_PLOTS_DIR) -> None:
     """
@@ -281,12 +255,9 @@ def generate_xai_aggregate_report_graphs(output_dir: str = XAI_VALIDATION_AGGREG
     logger.info("[GRAPH] 3 collage charts saved to '%s'", run_dir)
     print(f"Graphs saved in folder: {run_dir}")
 
-
-# ---------------------------------------------------------------------------
 # Standalone usage:
 #   python graph/xai_aggregate_report_graph_gnerator.py
 #   python graph/xai_aggregate_report_graph_gnerator.py --output-dir my_plots
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Generate XAI evaluation report collages from the latest MongoDB report."

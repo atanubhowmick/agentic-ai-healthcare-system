@@ -19,10 +19,6 @@ from core.mongo_client import (
 from log.logger import logger
 
 
-# ---------------------------------------------------------------------------
-# MIMIC abbreviation expander
-# ---------------------------------------------------------------------------
-
 _MIMIC_ABBREV: dict[str, str] = {
     # Cardiac
     "stemi":   "st elevation myocardial infarction",
@@ -83,11 +79,7 @@ def _expand_abbreviations(text: str) -> str:
     return " ".join(expanded)
 
 
-# ---------------------------------------------------------------------------
-# Rule replication (mirrors xai-validation-service/src/validators/medical_rules.py)
-# Checks BOTH symptoms and diagnosis_text so MIMIC ICD descriptions are included.
-# ---------------------------------------------------------------------------
-
+# Mirrors medical_rules.py — checks both symptoms and diagnosis_text for MIMIC ICD descriptions.
 _CRITICAL_SYMPTOM_KEYWORDS = [
     "cardiac arrest", "heart attack", "myocardial infarction", "stemi", "nstemi",
     "acs", "acute coronary syndrome", "ventricular fibrillation",
@@ -133,10 +125,6 @@ def _rule_triggered(symptoms: str, severity: str, emergency_care: str,
     return False
 
 
-# ---------------------------------------------------------------------------
-# Readability helpers (Flesch Reading Ease — no external library needed)
-# ---------------------------------------------------------------------------
-
 def _count_syllables(word: str) -> int:
     """Crude syllable counter based on vowel groups."""
     word = word.lower().strip(".,!?;:")
@@ -179,10 +167,6 @@ def _compute_text_metrics(result: dict) -> dict:
         "flesch_reading_ease": _flesch_reading_ease(summary),
     }
 
-
-# ---------------------------------------------------------------------------
-# Payload helpers
-# ---------------------------------------------------------------------------
 
 def _build_diagnosis_details(
     symptoms: str,
@@ -239,10 +223,6 @@ def _perturb_severity(severity: str) -> str:
     return mapping.get(severity.upper(), "HIGH")
 
 
-# ---------------------------------------------------------------------------
-# HTTP helper
-# ---------------------------------------------------------------------------
-
 def _call_xai(
     patient_id: str,
     symptoms: str,
@@ -286,10 +266,6 @@ def _call_xai(
         logger.warning("[XAI_EVAL] HTTP call failed for %s: %s", patient_id, exc)
     return None
 
-
-# ---------------------------------------------------------------------------
-# Label helpers
-# ---------------------------------------------------------------------------
 
 def _label_emergency(row: dict) -> str | None:
     adm = str(row.get("admission_type", "")).upper()
@@ -350,10 +326,6 @@ def _safe_cases(cases: list[dict]) -> list[tuple[dict, str, str, str]]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# Main evaluator
-# ---------------------------------------------------------------------------
-
 class XaiEvaluator:
     """
     Evaluate XAI validation service across Options 1, 2, 4, 6 and
@@ -377,7 +349,6 @@ class XaiEvaluator:
         self.max_fidelity_cases = max_fidelity_cases
         self.max_consistency_cases = max_consistency_cases
 
-    # ------------------------------------------------------------------
     def run_evaluation(self) -> None:
         logger.info("[XAI_EVAL] Starting XAI evaluation | max_cases=%s", self.max_cases or "all")
         started = time.time()
@@ -426,9 +397,6 @@ class XaiEvaluator:
         save_xai_report(report)
         logger.info("[XAI_EVAL] Report saved.")
 
-    # ------------------------------------------------------------------
-    # Option 1 + 6 + Sparsity + Interpretability
-    # ------------------------------------------------------------------
     def _eval_correct_diagnoses(self, cases: list[dict]) -> dict:
         logger.info("[XAI_EVAL] Option 1/6 + Sparsity + Interpretability …")
 
@@ -520,9 +488,6 @@ class XaiEvaluator:
         return {"opt1": opt1, "opt6": opt6, "sparsity": sparsity, "interpretability": interpretability,
                 "per_case_rows": per_case_rows}
 
-    # ------------------------------------------------------------------
-    # Option 2
-    # ------------------------------------------------------------------
     def _eval_undertriage(self, cases: list[dict]) -> dict:
         logger.info("[XAI_EVAL] Option 2: under-triage detection …")
 
@@ -610,9 +575,6 @@ class XaiEvaluator:
             ),
         }
 
-    # ------------------------------------------------------------------
-    # Option 4
-    # ------------------------------------------------------------------
     def _eval_rule_coverage(self, cases: list[dict]) -> dict:
         logger.info("[XAI_EVAL] Option 4: rule engine coverage …")
 
@@ -679,9 +641,6 @@ class XaiEvaluator:
             ),
         }
 
-    # ------------------------------------------------------------------
-    # Stability: send identical payload 3× — measure recommendation agreement
-    # ------------------------------------------------------------------
     def _eval_stability(self, cases: list[dict]) -> dict:
         logger.info("[XAI_EVAL] Stability: sending identical payloads 3× …")
 
@@ -739,9 +698,6 @@ class XaiEvaluator:
             ),
         }
 
-    # ------------------------------------------------------------------
-    # Fidelity: perturb severity, check decision + explanation change
-    # ------------------------------------------------------------------
     def _eval_fidelity(self, cases: list[dict]) -> dict:
         logger.info("[XAI_EVAL] Fidelity: perturbation tests …")
 
@@ -819,9 +775,6 @@ class XaiEvaluator:
             ),
         }
 
-    # ------------------------------------------------------------------
-    # Consistency: paraphrase symptoms — check recommendation agreement
-    # ------------------------------------------------------------------
     def _eval_consistency(self, cases: list[dict]) -> dict:
         logger.info("[XAI_EVAL] Consistency: paraphrase tests …")
 
@@ -880,9 +833,6 @@ class XaiEvaluator:
             ),
         }
 
-    # ------------------------------------------------------------------
-    # Sparsity aggregation (from text_metrics collected during Option 1 calls)
-    # ------------------------------------------------------------------
     @staticmethod
     def _aggregate_sparsity(metrics: list[dict]) -> dict:
         if not metrics:
@@ -914,9 +864,6 @@ class XaiEvaluator:
             ),
         }
 
-    # ------------------------------------------------------------------
-    # Interpretability aggregation (Flesch Reading Ease)
-    # ------------------------------------------------------------------
     @staticmethod
     def _aggregate_interpretability(metrics: list[dict]) -> dict:
         if not metrics:

@@ -16,7 +16,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# -- Page-specific CSS ---------------------------------------------------------
 st.markdown(
     """
     <style>
@@ -101,7 +100,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# -- Session state defaults ----------------------------------------------------
 if "is_loading" not in st.session_state:
     st.session_state.is_loading = False
 if "pending_symptoms" not in st.session_state:
@@ -111,7 +109,6 @@ if "diagnosis_result" not in st.session_state:
 if "response_time" not in st.session_state:
     st.session_state.response_time = None
 
-# -- Guard: redirect if no patient info ----------------------------------------
 if not st.session_state.get("patient_id") or not st.session_state.get("patient_name"):
     st.warning("Session expired. Please check in again.")
     if st.button("← Back to Check-in"):
@@ -123,10 +120,8 @@ patient_name: str = st.session_state.patient_name
 patient_gender: str = st.session_state.get("patient_gender", "")
 patient_age_group: str = st.session_state.get("patient_age_group", "")
 
-# -- Banner --------------------------------------------------------------------
 render_banner(patient_name=patient_name, patient_id=patient_id)
 
-# -- Symptom input form --------------------------------------------------------
 _, center_col, _ = st.columns([1, 3, 1])
 
 with center_col:
@@ -173,7 +168,6 @@ with center_col:
             st.session_state._start_time = time.monotonic()
             st.rerun()
 
-# -- Call orchestrator and display results -------------------------------------
 with center_col:
     if st.session_state.is_loading and st.session_state.pending_symptoms:
         with st.spinner("Analysing symptoms - consulting specialist agents, please wait..."):
@@ -207,7 +201,6 @@ with center_col:
     if st.session_state.diagnosis_result:
         data = st.session_state.diagnosis_result
 
-        # -- Parse response ------------------------------------------------
         if not data.get("is_success"):
             err = data.get("error", {})
             st.error(
@@ -227,7 +220,6 @@ with center_col:
         conflict_reason = payload.get("conflict_reason", "")
         human_review_reason = payload.get("human_review_reason", "")
 
-        # -- Result card ---------------------------------------------------
         st.markdown("---")
         st.markdown("#### Diagnosis Report")
 
@@ -266,7 +258,6 @@ with center_col:
         if conflict and conflict_reason:
             st.warning(f"**Specialist Conflict Detected:** {conflict_reason}")
 
-        # -- Diagnosis section ---------------------------------------------
         if diagnosis:
             st.markdown("---")
             st.markdown("**Diagnosis Summary**")
@@ -353,7 +344,6 @@ with center_col:
         else:
             st.info("No diagnosis data available in this response.")
 
-        # -- Treatment section ---------------------------------------------
         if treatment:
             st.markdown("---")
             with st.expander("Treatment Recommendations", expanded=True):
@@ -401,7 +391,6 @@ with center_col:
                     for item in t["monitoringRequired"]:
                         st.markdown(f"- {item}")
 
-        # -- XAI validations -----------------------------------------------
         if xai_diag or xai_treat:
             st.markdown("---")
             for xai_label, xai_data in [
@@ -447,12 +436,11 @@ with center_col:
                         for concern in result["key_concerns"]:
                             st.markdown(f"- {concern}")
 
-        # -- Audit trail ---------------------------------------------------
         if audit_trail:
             with st.expander("Audit Trail", expanded=False):
                 for i, step in enumerate(audit_trail, 1):
                     st.markdown(f"`{i:02d}` {step}")
 
 
-# -- Footer --------------------------------------------------------------------
+
 render_footer()

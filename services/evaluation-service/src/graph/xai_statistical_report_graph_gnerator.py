@@ -35,13 +35,11 @@ plt.rcParams.update({
     "legend.fontsize": _LEGEND_FONTSIZE,
 })
 
-
 def _add_panel_border(ax: plt.Axes) -> None:
     for spine in ax.spines.values():
         spine.set_visible(True)
         spine.set_linewidth(_BORDER_WIDTH)
         spine.set_color(_BORDER_COLOR)
-
 
 def _prepare_classification_data(payload: dict):
     """
@@ -56,11 +54,6 @@ def _prepare_classification_data(payload: dict):
     y_score   = [r["risk_score"] for r in rows]
     decisions = [r["validator_decision"] for r in rows]
     return y_true, y_score, decisions
-
-
-# ---------------------------------------------------------------------------
-# Chart 1 — Confusion Matrix
-# ---------------------------------------------------------------------------
 
 def generate_confusion_matrix(payload: dict, run_dir: str) -> None:
     from sklearn.metrics import confusion_matrix
@@ -88,11 +81,6 @@ def generate_confusion_matrix(payload: dict, run_dir: str) -> None:
     fig.savefig(os.path.join(run_dir, "confusion_matrix.png"), dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("[STAT_GRAPH] confusion_matrix.png saved")
-
-
-# ---------------------------------------------------------------------------
-# Chart 2 — ROC Curve
-# ---------------------------------------------------------------------------
 
 def generate_roc_curve(payload: dict, run_dir: str) -> None:
     from sklearn.metrics import roc_curve, roc_auc_score
@@ -124,11 +112,6 @@ def generate_roc_curve(payload: dict, run_dir: str) -> None:
     plt.close(fig)
     logger.info("[STAT_GRAPH] roc_curve.png saved")
 
-
-# ---------------------------------------------------------------------------
-# Chart 3 — Precision–Recall Curve
-# ---------------------------------------------------------------------------
-
 def generate_pr_curve(payload: dict, run_dir: str) -> None:
     from sklearn.metrics import precision_recall_curve, average_precision_score
 
@@ -157,11 +140,6 @@ def generate_pr_curve(payload: dict, run_dir: str) -> None:
     fig.savefig(os.path.join(run_dir, "precision_recall_curve.png"), dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("[STAT_GRAPH] precision_recall_curve.png saved")
-
-
-# ---------------------------------------------------------------------------
-# Chart 4 — Confidence Distribution
-# ---------------------------------------------------------------------------
 
 def generate_confidence_distribution(payload: dict, run_dir: str) -> None:
     rows = payload.get("per_case_decisions", [])
@@ -199,11 +177,6 @@ def generate_confidence_distribution(payload: dict, run_dir: str) -> None:
     plt.close(fig)
     logger.info("[STAT_GRAPH] confidence_distribution.png saved")
 
-
-# ---------------------------------------------------------------------------
-# Chart 5 — Risk vs Confidence Scatter
-# ---------------------------------------------------------------------------
-
 def generate_risk_vs_confidence(payload: dict, run_dir: str) -> None:
     rows = payload.get("per_case_decisions", [])
 
@@ -235,11 +208,6 @@ def generate_risk_vs_confidence(payload: dict, run_dir: str) -> None:
     fig.savefig(os.path.join(run_dir, "risk_vs_confidence.png"), dpi=_DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("[STAT_GRAPH] risk_vs_confidence.png saved")
-
-
-# ---------------------------------------------------------------------------
-# Public entry point
-# ---------------------------------------------------------------------------
 
 def generate_xai_statistical_report_graphs(output_dir: str = XAI_VALIDATION_STATISTICAL_REPORT_PLOTS_DIR) -> None:
     """
@@ -277,12 +245,9 @@ def generate_xai_statistical_report_graphs(output_dir: str = XAI_VALIDATION_STAT
     logger.info("[STAT_GRAPH] 5 statistical charts saved to '%s'", run_dir)
     print(f"Statistical charts saved in folder: {run_dir}")
 
-
-# ---------------------------------------------------------------------------
 # Standalone usage:
 #   python graph/xai_statistical_report_graph_gnerator.py
 #   python graph/xai_statistical_report_graph_gnerator.py --output-dir my_plots
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Generate XAI statistical classification charts from the latest MongoDB report."
