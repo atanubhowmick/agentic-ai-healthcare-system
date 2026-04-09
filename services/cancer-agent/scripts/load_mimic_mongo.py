@@ -1,5 +1,5 @@
-# Extracts MIMIC-IV cancer cases from BigQuery and saves them to MongoDB (mimic_evaluation_cases).
-# The collection is consumed by two evaluation pipelines in the evaluation-service:
+# Extracts MIMIC-IV cancer cases from BigQuery and saves them to MongoDB (mimic_iv_records).
+# The collection is consumed by two pipelines in the evaluation-service:
 #   - TF-IDF baseline evaluator  : trains HistGBM / LogisticRegression / LinearSVC classifiers
 #   - XAI evaluator              : sends cases through the XAI validation service for metrics
 #
@@ -11,8 +11,8 @@
 # Re-enable the MOD filter in load_mimic_data.py for a clean train/eval split.
 #
 # Usage:
-#   python extract_evaluation_dataset.py --project MY-GCP-PROJECT --limit 2000
-#   python extract_evaluation_dataset.py --project MY-GCP-PROJECT --dry-run
+#   python load_mimic_mongo.py --project MY-GCP-PROJECT --limit 2000
+#   python load_mimic_mongo.py --project MY-GCP-PROJECT --dry-run
 
 import argparse
 import os
@@ -35,7 +35,7 @@ from log.logger import logger
 from load_mimic_data import _process_row  # re-use existing row processor
 
 
-def _process_evaluation_row(row: dict) -> dict | None:
+def _process_mimic_row(row: dict) -> dict | None:
     """
     Extend _process_row with admission_type and ICU-based severity.
 
@@ -53,7 +53,7 @@ def _process_evaluation_row(row: dict) -> dict | None:
     has_icu_stay   = bool(row.get("has_icu_stay", 0))
 
     # Override severity with ICU/admission-based derivation (more reliable
-    # than discharge_location for ground truth evaluation).
+    # than discharge_location for ground truth labels).
     # Covers all 9 MIMIC-IV v3.1 admission_type values.
     if has_icu_stay:
         rec["severity"] = "CRITICAL"
@@ -75,12 +75,7 @@ def _process_evaluation_row(row: dict) -> dict | None:
     return rec
 
 
-# ---------------------------------------------------------------------------
-# BigQuery SQL — identical JOIN structure to load_mimic_data.py but with
-# the MOD filter to isolate the evaluation split.
-# ---------------------------------------------------------------------------
-
-_EVALUATION_SQL = """
+_MIMIC_SQL = """
 SELECT
     d.subject_id,
     d.hadm_id,
@@ -113,62 +108,54 @@ LIMIT {limit}
 """
 
 
-# ---------------------------------------------------------------------------
-# BigQuery loader (own copy so load_mimic_data.py is not modified)
-# ---------------------------------------------------------------------------
-
-def _load_evaluation_rows(project_id: str, limit: int) -> list[dict]:
-    """Fetch evaluation rows from MIMIC-IV BigQuery."""
+def _load_mimic_rows(project_id: str, limit: int) -> list[dict]:
+    """Fetch MIMIC-IV rows from BigQuery."""
     client = bigquery.Client(project=project_id)
-    query = _EVALUATION_SQL.format(limit=limit)
-    logger.info("[EVAL] Submitting BigQuery evaluation query (limit=%d)...", limit)
+    query = _MIMIC_SQL.format(limit=limit)
+    logger.info("[MIMIC] Submitting BigQuery query (limit=%d)...", limit)
     job = client.query(query)
-    logger.info("[EVAL] job_id: %s | waiting for results...", job.job_id)
+    logger.info("[MIMIC] job_id: %s | waiting for results...", job.job_id)
 
     rows: list[dict] = []
     for row in job.result():
         rows.append(dict(row))
         if len(rows) % 200 == 0:
-            logger.info("[EVAL] Fetched %d rows so far...", len(rows))
+            logger.info("[MIMIC] Fetched %d rows so far...", len(rows))
 
-    logger.info("[EVAL] BigQuery fetch complete | total rows: %d", len(rows))
+    logger.info("[MIMIC] BigQuery fetch complete | total rows: %d", len(rows))
     return rows
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-def extract_evaluation_set(
+def load_mimic_cases(
     project_id: str,
     limit: int,
     dry_run: bool = False,
 ) -> list[dict]:
     """
-    Extract evaluation records from MIMIC-IV and persist to MongoDB.
+    Load MIMIC-IV cancer cases from BigQuery and persist to MongoDB.
 
     Args:
         project_id:  GCP billing project (not physionet-data).
-        limit:       Maximum number of evaluation cases to fetch.
+        limit:       Maximum number of cases to fetch.
         dry_run:     If True, fetch only 20 rows and print without saving.
 
     Returns:
         List of processed record dicts.
     """
     effective_limit = 20 if dry_run else limit
-    raw_rows = _load_evaluation_rows(project_id, effective_limit)
+    raw_rows = _load_mimic_rows(project_id, effective_limit)
 
     records: list[dict] = []
     skipped = 0
     for row in raw_rows:
-        rec = _process_evaluation_row(row)
+        rec = _process_mimic_row(row)
         if rec:
             records.append(rec)
         else:
             skipped += 1
 
     logger.info(
-        "[EVAL] Processed %d records | skipped %d (no usable symptom text)",
+        "[MIMIC] Processed %d records | skipped %d (no usable symptom text)",
         len(records), skipped,
     )
 
@@ -185,21 +172,17 @@ def extract_evaluation_set(
         return records
 
     if not records:
-        logger.warning("[EVAL] No records to save. Exiting.")
+        logger.warning("[MIMIC] No records to save. Exiting.")
         return records
 
     saved = save_evaluation_cases(records)
-    logger.info("[EVAL] Saved %d evaluation records → MongoDB (%s)", saved, "mimic_evaluation_cases")
+    logger.info("[MIMIC] Saved %d records → MongoDB (%s)", saved, "mimic_iv_records")
     return records
 
 
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
-
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Extract MIMIC-IV evaluation test set for Cancer Agent evaluation"
+        description="Load MIMIC-IV cancer cases into MongoDB"
     )
     parser.add_argument(
         "--project", required=True,
@@ -207,7 +190,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--limit", type=int, default=2000,
-        help="Maximum evaluation cases to extract (default: 2000)",
+        help="Maximum cases to load (default: 2000)",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -215,7 +198,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    extract_evaluation_set(
+    load_mimic_cases(
         project_id=args.project,
         limit=args.limit,
         dry_run=args.dry_run,

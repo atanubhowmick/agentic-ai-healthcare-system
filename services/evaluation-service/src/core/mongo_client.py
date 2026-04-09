@@ -8,7 +8,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 
 from core.config import (
-    MONGO_DB, MONGO_EVAL_COLLECTION, MONGO_TFIDF_REPORT_COLLECTION,
+    MONGO_DB, MONGO_MIMIC_COLLECTION, MONGO_TFIDF_REPORT_COLLECTION,
     MONGO_XAI_REPORT_COLLECTION, MONGO_URI,
 )
 from log.logger import logger
@@ -38,7 +38,7 @@ def save_evaluation_cases(records: list[dict]) -> int:
         logger.warning("[MONGO] save_evaluation_cases called with empty list — nothing saved.")
         return 0
 
-    col = _get_collection(MONGO_EVAL_COLLECTION)
+    col = _get_collection(MONGO_MIMIC_COLLECTION)
     col.create_index(
         [("subject_id", pymongo.ASCENDING), ("hadm_id", pymongo.ASCENDING)],
         unique=True,
@@ -72,7 +72,7 @@ def load_evaluation_cases(max_cases: int = 0) -> list[dict]:
     Returns:
         List of record dicts (MongoDB _id field removed).
     """
-    col   = _get_collection(MONGO_EVAL_COLLECTION)
+    col   = _get_collection(MONGO_MIMIC_COLLECTION)
     query = col.find({}, {"_id": 0})
     if max_cases and max_cases > 0:
         query = query.limit(max_cases)
@@ -84,7 +84,7 @@ def load_evaluation_cases(max_cases: int = 0) -> list[dict]:
 
 def count_evaluation_cases() -> int:
     """Return the total number of evaluation cases stored in MongoDB."""
-    return _get_collection(MONGO_EVAL_COLLECTION).count_documents({})
+    return _get_collection(MONGO_MIMIC_COLLECTION).count_documents({})
 
 
 def save_tfidf_report(report: dict) -> None:

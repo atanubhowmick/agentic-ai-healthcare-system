@@ -1,34 +1,17 @@
-"""
-MIMIC-IV v3.1 Cancer Cases - Data Loader
-==========================================
-Ingests oncology cases from MIMIC-IV v3.1 into the ChromaDB vector store used by
-the Cancer Agent for RAG (Retrieval-Augmented Generation).
-
-Source: Google BigQuery (requires GCP credentials)
-
-MIMIC-IV v3.1 BigQuery schemas (physionet-data project):
-  physionet-data.mimiciv_3_1_hosp   - hospital module (diagnoses, admissions)
-  physionet-data.mimiciv_note       - clinical notes (discharge summaries)
-  physionet-data.mimiciv_ed         - ED module (triage chief complaints)
-
-NOTE: --project is YOUR OWN GCP billing project ID (not physionet-data).
-      The data lives in physionet-data; your project is used for query billing.
-
-ICD-10 codes extracted: C00-C97 (malignant neoplasms) + D00-D49 (in-situ / benign)
-
-Document text priority (for semantic embedding):
-  1. ED triage chief complaint  - patient's own words (best match for user queries)
-  2. Discharge note Chief Complaint + HPI - clinical free text (good match)
-  3. ICD long title + lay synonym  - structured text (fallback)
-
-Usage
------
-# From BigQuery (replace MY-GCP-PROJECT with your own GCP project ID):
-python load_mimic_data.py --project MY-GCP-PROJECT --limit 50000
-
-# Dry-run (print first 3 records, no write):
-python load_mimic_data.py --project MY-GCP-PROJECT --dry-run
-"""
+# Loads MIMIC-IV v3.1 cancer cases from BigQuery into ChromaDB for Cancer Agent RAG.
+# ICD-10 codes C00-C97 (malignant neoplasms) and D00-D49 (in-situ/benign) are extracted.
+#
+# Embedding text priority (symptom-only — diagnosis kept in metadata to avoid diluting similarity):
+#   1. ED triage chief complaint  — patient's own words, best semantic match for user queries
+#   2. Discharge note Chief Complaint + HPI — clinical free text
+#   3. ICD long title                       — fallback when no free text is available
+#
+# --project is your GCP billing project ID, not physionet-data.
+# BigQuery tables: mimiciv_3_1_hosp, mimiciv_note, mimiciv_ed (all under physionet-data).
+#
+# Usage:
+#   python load_mimic_data.py --project MY-GCP-PROJECT --limit 50000
+#   python load_mimic_data.py --project MY-GCP-PROJECT --dry-run
 
 import argparse
 import re
@@ -39,6 +22,11 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
+import chromadb
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+from core.config import CHROMA_HOST, CHROMA_PORT, MIMIC_COLLECTION_NAME
 from log.logger import logger
 
 
@@ -226,11 +214,6 @@ def _process_row(row: dict) -> dict | None:
 
 def _write_to_chroma(records: list[dict], batch_size: int = 200) -> int:
     """Embed and store processed records in ChromaDB. Returns count written."""
-    import chromadb
-    from langchain_chroma import Chroma
-    from langchain_openai import OpenAIEmbeddings
-    from core.config import CHROMA_HOST, CHROMA_PORT, MIMIC_COLLECTION_NAME
-
     chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     store = Chroma(

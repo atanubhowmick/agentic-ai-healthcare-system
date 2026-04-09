@@ -15,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve
 from sklearn.svm import LinearSVC
 
-from core.config import MONGO_DB, MONGO_EVAL_COLLECTION, MONGO_URI
+from core.config import MONGO_DB, MONGO_MIMIC_COLLECTION, MONGO_URI
 from log.logger import logger
 
 
@@ -171,7 +171,7 @@ class TfidfPredictor:
     def _train(self) -> None:
         logger.info("[TFIDF_PRED] Loading MIMIC evaluation records from MongoDB...")
         client  = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5_000)
-        records = list(client[MONGO_DB][MONGO_EVAL_COLLECTION].find({}, {"_id": 0}))
+        records = list(client[MONGO_DB][MONGO_MIMIC_COLLECTION].find({}, {"_id": 0}))
         client.close()
 
         if not records:

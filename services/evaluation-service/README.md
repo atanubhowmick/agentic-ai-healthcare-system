@@ -94,7 +94,7 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8017 --reload
 
 ### Prerequisites
 
-- MongoDB running with MIMIC-IV data loaded into `mimic_evaluation_cases`
+- MongoDB running with MIMIC-IV data loaded into `mimic_iv_records`
 - XAI validation service running on port 8016 (for XAI evaluation only)
 
 ### Environment Variables
@@ -103,7 +103,7 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8017 --reload
 |----------|---------|-------------|
 | `MONGO_URI` | `mongodb://127.0.0.1:27017` | MongoDB connection string |
 | `MONGO_DB` | `agentic_ai_healthcare_db` | Database name |
-| `MONGO_EVAL_COLLECTION` | `mimic_evaluation_cases` | MIMIC-IV evaluation records |
+| `MONGO_MIMIC_COLLECTION` | `mimic_iv_records` | MIMIC-IV evaluation records |
 | `MONGO_TFIDF_REPORT_COLLECTION` | `tfidf_baseline_reports` | TF-IDF report storage |
 | `MONGO_XAI_REPORT_COLLECTION` | `xai_evaluation_reports` | XAI report storage |
 | `XAI_SERVICE_URL` | `http://localhost:8016` | XAI validation service base URL |
