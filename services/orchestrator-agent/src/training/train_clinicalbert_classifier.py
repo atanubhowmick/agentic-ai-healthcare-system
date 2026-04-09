@@ -43,6 +43,7 @@ import logging
 import os
 import random
 import sys
+from collections import Counter
 
 import numpy as np
 import torch
@@ -385,7 +386,6 @@ def train_and_save(
         sys.exit(1)
 
     # Log per-label counts before training
-    from collections import Counter
     label_counts = Counter(lbl for _, lbl in all_data)
     log.info("Combined dataset: %d examples | %s", len(all_data),
              " | ".join(f"{k}={v}" for k, v in sorted(label_counts.items())))

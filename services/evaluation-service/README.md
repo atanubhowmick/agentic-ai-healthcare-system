@@ -104,7 +104,7 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8017 --reload
 | `MONGO_URI` | `mongodb://127.0.0.1:27017` | MongoDB connection string |
 | `MONGO_DB` | `agentic_ai_healthcare_db` | Database name |
 | `MONGO_MIMIC_COLLECTION` | `mimic_iv_records` | MIMIC-IV evaluation records |
-| `MONGO_TFIDF_REPORT_COLLECTION` | `tfidf_baseline_reports` | TF-IDF report storage |
+| `MONGO_CANCER_AGENT_REPORT_COLLECTION` | `cancer_agent_report` | TF-IDF report storage |
 | `MONGO_XAI_REPORT_COLLECTION` | `xai_evaluation_reports` | XAI report storage |
 | `XAI_SERVICE_URL` | `http://localhost:8016` | XAI validation service base URL |
 | `EVALUATION_SVC_REPORTS` | `evaluation-svc-reports` | Base directory for plot outputs |

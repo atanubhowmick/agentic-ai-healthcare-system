@@ -12,6 +12,12 @@ if _SRC not in sys.path:
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import seaborn as sns  # noqa: E402
+from sklearn.metrics import (  # noqa: E402
+    average_precision_score,
+    precision_recall_curve,
+    roc_auc_score,
+    roc_curve,
+)
 
 from core.config import CANCER_AGENT_STATISTICAL_REPORT_PLOTS_DIR  # noqa: E402
 from core.mongo_client import load_latest_tfidf_report  # noqa: E402
@@ -81,8 +87,6 @@ def _generate_confusion_matrix(cm_data: dict, title: str, filename: str, run_dir
     logger.info("[CANCER_STAT_GRAPH] %s saved", filename)
 
 def _generate_roc_curve(per_case_rows: list[dict], title: str, filename: str, run_dir: str) -> None:
-    from sklearn.metrics import roc_auc_score, roc_curve
-
     y_true, y_score, _ = _extract_arrays(per_case_rows)
 
     fig, ax = plt.subplots(figsize=(8, 6), dpi=_DPI)
@@ -112,8 +116,6 @@ def _generate_roc_curve(per_case_rows: list[dict], title: str, filename: str, ru
     logger.info("[CANCER_STAT_GRAPH] %s saved", filename)
 
 def _generate_pr_curve(per_case_rows: list[dict], title: str, filename: str, run_dir: str) -> None:
-    from sklearn.metrics import average_precision_score, precision_recall_curve
-
     y_true, y_score, _ = _extract_arrays(per_case_rows)
 
     fig, ax = plt.subplots(figsize=(8, 6), dpi=_DPI)

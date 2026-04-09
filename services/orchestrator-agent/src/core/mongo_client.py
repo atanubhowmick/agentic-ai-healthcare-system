@@ -2,6 +2,10 @@
 
 import asyncio
 from datetime import datetime, timezone
+
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from core.config import MONGO_URI, MONGO_DB
 from log.logger import logger
 
 _client = None
@@ -11,14 +15,11 @@ def _get_db():
     global _client
     if _client is None:
         try:
-            from motor.motor_asyncio import AsyncIOMotorClient
-            from core.config import MONGO_URI, MONGO_DB
             _client = AsyncIOMotorClient(MONGO_URI, serverSelectionTimeoutMS=3000)
             return _client[MONGO_DB]
         except Exception as e:
             logger.warning("MongoDB client init failed (persistence disabled): %s", str(e))
             return None
-    from core.config import MONGO_DB
     return _client[MONGO_DB]
 
 

@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 import chromadb
+from google.cloud import bigquery
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 
@@ -152,8 +153,6 @@ LIMIT {limit}
 
 def _load_from_bigquery(project_id: str, limit: int):
     """Return a list of raw row dicts from BigQuery."""
-    from google.cloud import bigquery
-
     client = bigquery.Client(project=project_id)
     query = BIGQUERY_SQL.format(limit=limit)
     logger.info("[LOADER] Submitting BigQuery query (limit=%d)...", limit)

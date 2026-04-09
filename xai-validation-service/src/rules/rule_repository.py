@@ -11,6 +11,7 @@ from pathlib import Path
 from pymongo import MongoClient
 from pymongo import errors as pymongo_errors
 
+from core.config import MONGODB_URI, MONGODB_DB_NAME
 from log.logger import logger
 
 _COLLECTION = "xai_validation_rules"
@@ -22,7 +23,6 @@ _JSON_SEED = Path(__file__).parent.parent.parent / "data" / "xai_validation_rule
 
 
 def _get_collection():
-    from core.config import MONGODB_URI, MONGODB_DB_NAME
     client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=3000)
     return client[MONGODB_DB_NAME][_COLLECTION]
 

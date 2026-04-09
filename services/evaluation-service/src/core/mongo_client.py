@@ -8,7 +8,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 
 from core.config import (
-    MONGO_DB, MONGO_MIMIC_COLLECTION, MONGO_TFIDF_REPORT_COLLECTION,
+    MONGO_DB, MONGO_MIMIC_COLLECTION, MONGO_CANCER_AGENT_REPORT_COLLECTION,
     MONGO_XAI_REPORT_COLLECTION, MONGO_URI,
 )
 from log.logger import logger
@@ -88,17 +88,17 @@ def count_evaluation_cases() -> int:
 
 
 def save_tfidf_report(report: dict) -> None:
-    """Insert a TF-IDF baseline report with a UTC timestamp."""
-    col = _get_collection(MONGO_TFIDF_REPORT_COLLECTION)
+    """Insert a Cancer Agent TF-IDF report with a UTC timestamp."""
+    col = _get_collection(MONGO_CANCER_AGENT_REPORT_COLLECTION)
     col.create_index([("run_at", pymongo.DESCENDING)], background=True)
     doc = {"run_at": datetime.datetime.utcnow(), **report}
     col.insert_one(doc)
-    logger.info("[MONGO] TF-IDF baseline report saved to '%s'", MONGO_TFIDF_REPORT_COLLECTION)
+    logger.info("[MONGO] Cancer Agent TF-IDF report saved to '%s'", MONGO_CANCER_AGENT_REPORT_COLLECTION)
 
 
 def load_latest_tfidf_report() -> Optional[dict]:
-    """Return the most recent TF-IDF baseline report, or None."""
-    col = _get_collection(MONGO_TFIDF_REPORT_COLLECTION)
+    """Return the most recent Cancer Agent TF-IDF report, or None."""
+    col = _get_collection(MONGO_CANCER_AGENT_REPORT_COLLECTION)
     doc = col.find_one({}, {"_id": 0}, sort=[("run_at", pymongo.DESCENDING)])
     if doc and isinstance(doc.get("run_at"), datetime.datetime):
         doc["run_at"] = doc["run_at"].isoformat() + "Z"
@@ -106,8 +106,8 @@ def load_latest_tfidf_report() -> Optional[dict]:
 
 
 def has_tfidf_report() -> bool:
-    """Return True if at least one TF-IDF baseline report exists."""
-    return _get_collection(MONGO_TFIDF_REPORT_COLLECTION).count_documents({}, limit=1) > 0
+    """Return True if at least one Cancer Agent TF-IDF report exists."""
+    return _get_collection(MONGO_CANCER_AGENT_REPORT_COLLECTION).count_documents({}, limit=1) > 0
 
 
 def save_xai_report(report: dict) -> None:
