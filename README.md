@@ -239,7 +239,7 @@ agentic-ai-healthcare-system/
 │   │   ├── scripts/
 │   │   │   ├── load_mimic_data.py  # Load MIMIC-IV oncology cases into ChromaDB
 │   │   │   ├── load_mimic_mongo.py # Load MIMIC-IV cases into MongoDB
-│   │   │   └── export_models.py    # Export trained TF-IDF models
+│   │   │   └── train_models.py     # Train TF-IDF models and save to pickle for XAI SHAP
 │   │   └── src/
 │   │       ├── agent/              # DeepAgent + @tool: search_mimic_cases (cancer_agent.py)
 │   │       ├── api/                # FastAPI router (server.py)

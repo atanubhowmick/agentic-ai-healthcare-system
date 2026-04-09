@@ -150,7 +150,8 @@ services/cancer-agent/
 ├── run.sh
 ├── scripts/
 │   ├── load_mimic_data.py             # Load MIMIC-IV oncology cases into ChromaDB
-│   └── load_mimic_mongo.py            # Load MIMIC-IV records into MongoDB
+│   ├── load_mimic_mongo.py            # Load MIMIC-IV records into MongoDB
+│   └── train_models.py                # Train TF-IDF models and save to pickle for XAI SHAP
 └── src/
     ├── main.py                        # FastAPI app entry point
     ├── agent/
