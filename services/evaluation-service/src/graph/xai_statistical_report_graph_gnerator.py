@@ -12,6 +12,13 @@ import argparse
 
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.metrics import (
+    average_precision_score,
+    confusion_matrix,
+    precision_recall_curve,
+    roc_auc_score,
+    roc_curve,
+)
 
 from core.config import XAI_VALIDATION_STATISTICAL_REPORT_PLOTS_DIR
 from core.mongo_client import load_latest_xai_report
@@ -56,8 +63,6 @@ def _prepare_classification_data(payload: dict):
     return y_true, y_score, decisions
 
 def generate_confusion_matrix(payload: dict, run_dir: str) -> None:
-    from sklearn.metrics import confusion_matrix
-
     y_true, _, decisions = _prepare_classification_data(payload)
     y_pred = [0 if d == "APPROVE" else 1 for d in decisions]
 
@@ -83,8 +88,6 @@ def generate_confusion_matrix(payload: dict, run_dir: str) -> None:
     logger.info("[STAT_GRAPH] confusion_matrix.png saved")
 
 def generate_roc_curve(payload: dict, run_dir: str) -> None:
-    from sklearn.metrics import roc_curve, roc_auc_score
-
     y_true, y_score, _ = _prepare_classification_data(payload)
 
     fig, ax = plt.subplots(figsize=(8, 6), dpi=_DPI)
@@ -113,7 +116,6 @@ def generate_roc_curve(payload: dict, run_dir: str) -> None:
     logger.info("[STAT_GRAPH] roc_curve.png saved")
 
 def generate_pr_curve(payload: dict, run_dir: str) -> None:
-    from sklearn.metrics import precision_recall_curve, average_precision_score
 
     y_true, y_score, _ = _prepare_classification_data(payload)
 

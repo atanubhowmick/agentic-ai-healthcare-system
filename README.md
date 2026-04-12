@@ -173,8 +173,11 @@ mongosh --eval "db.adminCommand('ping')"
 
 | Collection | Used By | Purpose |
 |------------|---------|---------|
-| `mimic_cases` | Cancer Agent, Evaluation Service | MIMIC-IV patient records for TF-IDF training and evaluation |
-| `evaluation_reports` | Evaluation Service | Persisted XAI evaluation run results |
+| `mimic_iv_records` | Cancer Agent, Evaluation Service | MIMIC-IV patient records for TF-IDF training and XAI evaluation |
+| `cancer_agent_report` | Evaluation Service | Cancer Agent TF-IDF evaluation reports |
+| `xai_evaluation_reports` | Evaluation Service | XAI validation evaluation reports |
+| `xai_validation_rules` | XAI Validation Service | Clinical safety rules (seeded from JSON, overridden by MongoDB) |
+| `patient_diagnosis_treatment_records` | Orchestrator Agent | Completed patient cases persisted after full pipeline run |
 
 ### Reusing locally stored data with Docker
 
@@ -236,13 +239,17 @@ agentic-ai-healthcare-system/
 │   ├── cancer-agent/               # Cancer / Oncology Specialist - port 8003
 │   │   ├── Dockerfile
 │   │   ├── requirements.txt
+│   │   ├── scripts/
+│   │   │   ├── load_mimic_data.py  # Load MIMIC-IV oncology cases into ChromaDB
+│   │   │   ├── load_mimic_mongo.py # Load MIMIC-IV cases into MongoDB
+│   │   │   └── train_models.py     # Train TF-IDF models and save to pickle for XAI SHAP
 │   │   └── src/
 │   │       ├── agent/              # DeepAgent + @tool: search_mimic_cases (cancer_agent.py)
 │   │       ├── api/                # FastAPI router (server.py)
-│   │       ├── core/               # config.py - OPENAI_DEFAULT_MODEL, CHROMA_* env vars
+│   │       ├── core/               # config.py - OPENAI_DEFAULT_MODEL, CHROMA_*, MONGO_* env vars
 │   │       ├── datamodel/          # Pydantic request/response models
 │   │       ├── exception/          # CancerSvcException + handler
-│   │       ├── rag/                # MIMIC-IV ChromaDB retriever (mimic_retriever.py)
+│   │       ├── rag/                # MIMIC-IV ChromaDB retriever + TF-IDF predictor
 │   │       ├── service/            # Business logic (cancer_service.py)
 │   │       ├── log/
 │   │       └── main.py
@@ -277,23 +284,29 @@ agentic-ai-healthcare-system/
 │   │   ├── Dockerfile
 │   │   ├── requirements.txt
 │   │   └── src/
-│   │       ├── agents/             # classifier_router.py - ClinicalBERT/BioBERT classifier
+│   │       ├── agents/             # LangGraph graph, nodes, state, classifier router
 │   │       ├── api/                # FastAPI router (server.py)
-│   │       ├── core/               # config.py - service URLs, Chroma, Mongo env vars
+│   │       ├── core/               # config.py, chroma_client.py, mongo_client.py
 │   │       ├── exception/          # OrchestratorSvcException + handler
 │   │       ├── schemas/            # Shared request/response schemas
-│   │       ├── tools/              # HTTP client wrappers for specialist agents
-│   │       ├── training/           # BERT model training scripts
+│   │       ├── tools/              # HTTP client wrappers for specialist agents + XAI
+│   │       ├── training/           # ClinicalBERT training script
 │   │       ├── log/
-│   │       ├── constants.py
 │   │       └── main.py
 │   │
 │   └── evaluation-service/         # Metrics & Evaluation Service - port 8017
 │       ├── Dockerfile
 │       ├── requirements.txt
 │       └── src/
-│           ├── metrics_calculator.py
-│           ├── system_monitor.py
+│           ├── api/                # FastAPI router (server.py)
+│           ├── core/               # config.py, mongo_client.py
+│           ├── datamodel/          # Request/response models
+│           ├── evaluators/         # metrics_calculator, system_monitor, label_mapper,
+│           │                       #   tfidf_baseline_evaluator, xai_evaluator
+│           ├── graph/              # Matplotlib/Seaborn report graph generators
+│           ├── service/            # Background thread orchestration (evaluation_service.py)
+│           ├── exception/
+│           ├── log/
 │           └── main.py
 │
 ├── xai-validation-service/         # XAI & Ethical Validator - port 8016

@@ -15,15 +15,15 @@ async def health() -> dict:
     return {"status": "ok", "service": "evaluation-service"}
 
 
-@router.post("/evaluate/tfidf-baseline", response_model=GenericResponse[dict])
+@router.post("/evaluate/cancer-agent", response_model=GenericResponse[dict])
 async def trigger_tfidf_evaluation(request: TfidfBaselineRequest) -> GenericResponse[dict]:
     """
-    Trigger a TF-IDF baseline evaluation (80:20 train/test split by default).
-    Runs in a background thread; poll /evaluate/tfidf-baseline/status for progress.
+    Trigger a Cancer Agent evaluation (80:20 train/test split by default).
+    Runs in a background thread; poll /evaluate/cancer-agent/status for progress.
     """
-    logger.debug("[API] POST /evaluate/tfidf-baseline | max_cases=%s | test_size=%.0f%%",
+    logger.debug("[API] POST /evaluate/cancer-agent | max_cases=%s | test_size=%.0f%%",
                  request.max_cases or "all", request.test_size * 100)
-    evaluation_service.start_tfidf_evaluation(max_cases=request.max_cases, test_size=request.test_size)
+    evaluation_service.start_cancer_agent_evaluation(max_cases=request.max_cases, test_size=request.test_size)
     return GenericResponse.success({
         "status":    "started",
         "max_cases": request.max_cases or "all",
@@ -31,20 +31,20 @@ async def trigger_tfidf_evaluation(request: TfidfBaselineRequest) -> GenericResp
     })
 
 
-@router.get("/evaluate/tfidf-baseline/status", response_model=GenericResponse[EvaluationStatusResponse])
+@router.get("/evaluate/cancer-agent/status", response_model=GenericResponse[EvaluationStatusResponse])
 async def get_tfidf_status() -> GenericResponse[EvaluationStatusResponse]:
-    """Returns whether a TF-IDF evaluation is running and whether a report is available."""
-    status = evaluation_service.get_tfidf_status()
+    """Returns whether a Cancer Agent evaluation is running and whether a report is available."""
+    status = evaluation_service.get_cancer_agent_report_status()
     return GenericResponse.success(EvaluationStatusResponse(**status))
 
 
-@router.get("/evaluate/tfidf-baseline/report", response_model=GenericResponse[dict])
+@router.get("/evaluate/cancer-agent/report", response_model=GenericResponse[dict])
 async def get_tfidf_report() -> GenericResponse[dict]:
-    """Return the most recent TF-IDF baseline evaluation report."""
-    logger.debug("[API] GET /evaluate/tfidf-baseline/report")
-    report = evaluation_service.get_tfidf_report()
+    """Return the most recent Cancer Agent evaluation report."""
+    logger.debug("[API] GET /evaluate/cancer-agent/report")
+    report = evaluation_service.get_cancer_agent_report()
     if report is None:
-        raise EvaluationSvcException("TFIDF_REPORT_NOT_FOUND", "No TF-IDF baseline report available yet.")
+        raise EvaluationSvcException("CANCER_AGENT_REPORT_NOT_FOUND", "No Cancer Agent evaluation report available yet.")
     return GenericResponse.success(report)
 
 

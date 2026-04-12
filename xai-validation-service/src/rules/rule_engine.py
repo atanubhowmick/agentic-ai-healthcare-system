@@ -2,7 +2,9 @@
 # REJECT rules take precedence over REVIEW rules.
 
 import re
+
 from log.logger import logger
+from rules.rule_repository import load_rules
 
 # Matches: "SpO2 88%", "O2 sat 82", "oxygen saturation: 78%", "sats 86", "O2 sats 84"
 _SPO2_PATTERN = re.compile(
@@ -113,7 +115,6 @@ def evaluate(
     """Evaluate all active clinical safety rules. Returns (passed, action, reason, triggered_rule_ids).
     passed=True → proceed to LLM. passed=False → action is REJECT (hard stop) or REVIEW (inject concern)."""
     if rules is None:
-        from rules.rule_repository import load_rules
         rules = load_rules()
 
     triggered_rejects: list[tuple[str, str]] = []  # (rule_id, reason)

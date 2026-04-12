@@ -164,8 +164,6 @@ def _shap_emergency(models: dict, symptoms: str) -> list[dict]:
     SHAP values are in SVD component space; projected back through SVD.components_
     to recover approximate word-level importances.
     """
-    import shap as _shap
-
     m = models.get("emergency")
     if not m:
         return []

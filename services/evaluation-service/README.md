@@ -1,12 +1,12 @@
 # Evaluation Service
 
-Metrics and evaluation service — port **8017**. Loads MIMIC-IV cases from MongoDB and runs them through the XAI validation service and a TF-IDF baseline to measure clinical safety, explainability quality, and classifier performance.
+Metrics and evaluation service — port **8017**. Loads MIMIC-IV cases from MongoDB and runs them through the XAI validation service and a Cancer Agent TF-IDF to measure clinical safety, explainability quality, and classifier performance.
 
 ---
 
 ## Evaluations
 
-### TF-IDF Baseline (`POST /evaluate/tfidf-baseline`)
+### Cancer Agent Evaluation (`POST /evaluate/cancer-agent`)
 
 Trains TF-IDF + classifier models on MIMIC-IV cases and reports metrics on a held-out test split. Provides a classical ML reference for comparison against the LLM-based cancer agent. Note that TF-IDF is supervised (trained on MIMIC data) while the LLM agent is zero-shot — that asymmetry is intentional.
 
@@ -39,13 +39,13 @@ Both evaluations run in a background thread. Poll the `/status` endpoint for pro
 
 ## API
 
-### TF-IDF endpoints
+### Cancer Agent endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/evaluate/tfidf-baseline` | Start a TF-IDF evaluation |
-| `GET` | `/evaluate/tfidf-baseline/status` | Check if running / report available |
-| `GET` | `/evaluate/tfidf-baseline/report` | Fetch the latest report |
+| `POST` | `/evaluate/cancer-agent` | Start a Cancer Agent evaluation |
+| `GET` | `/evaluate/cancer-agent/status` | Check if running / report available |
+| `GET` | `/evaluate/cancer-agent/report` | Fetch the latest report |
 
 **Request body**
 ```json
@@ -94,7 +94,7 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8017 --reload
 
 ### Prerequisites
 
-- MongoDB running with MIMIC-IV data loaded into `mimic_evaluation_cases`
+- MongoDB running with MIMIC-IV data loaded into `mimic_iv_records`
 - XAI validation service running on port 8016 (for XAI evaluation only)
 
 ### Environment Variables
@@ -103,8 +103,8 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8017 --reload
 |----------|---------|-------------|
 | `MONGO_URI` | `mongodb://127.0.0.1:27017` | MongoDB connection string |
 | `MONGO_DB` | `agentic_ai_healthcare_db` | Database name |
-| `MONGO_EVAL_COLLECTION` | `mimic_evaluation_cases` | MIMIC-IV evaluation records |
-| `MONGO_TFIDF_REPORT_COLLECTION` | `tfidf_baseline_reports` | TF-IDF report storage |
+| `MONGO_MIMIC_COLLECTION` | `mimic_iv_records` | MIMIC-IV evaluation records |
+| `MONGO_CANCER_AGENT_REPORT_COLLECTION` | `cancer_agent_report` | TF-IDF report storage |
 | `MONGO_XAI_REPORT_COLLECTION` | `xai_evaluation_reports` | XAI report storage |
 | `XAI_SERVICE_URL` | `http://localhost:8016` | XAI validation service base URL |
 | `EVALUATION_SVC_REPORTS` | `evaluation-svc-reports` | Base directory for plot outputs |

@@ -151,6 +151,7 @@ All downstream services must be running before the orchestrator starts:
 | `CHROMA_SIMILARITY_THRESHOLD` | `0.85` | Minimum score for cache hit |
 | `MONGO_URI` | `mongodb://127.0.0.1:27017` | |
 | `MONGO_DB` | `agentic_ai_healthcare_db` | |
+| `MONGO_PATIENT_RECORDS_COLLECTION` | `patient_diagnosis_treatment_records` | Collection for completed patient cases |
 | `MAX_RETRY_COUNT` | `3` | Max XAI validation retries per loop |
 | `HTTP_TIMEOUT` | `60.0` | Per-request timeout for downstream calls (seconds) |
 | `CLINICALBERT_MODEL_DIR` | `./clinicalbert_router` | Fine-tuned ClinicalBERT model path (Tier 3) |

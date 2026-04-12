@@ -502,7 +502,6 @@ class TfidfBaselineEvaluator:
         labels = sorted(set(y_f))
 
         try:
-            from sklearn.metrics import roc_auc_score
             y_proba = clf.predict_proba(X_te_feat)
             roc_auc_ovr_weighted = round(
                 roc_auc_score(y_te, y_proba, multi_class="ovr",
@@ -518,8 +517,6 @@ class TfidfBaselineEvaluator:
 
         f1_w   = round(f1_score(y_te, y_pred, labels=labels, average="weighted", zero_division=0), 4)
         f1_m   = round(f1_score(y_te, y_pred, labels=labels, average="macro",    zero_division=0), 4)
-        acc    = round(accuracy_score(y_te, y_pred), 4)
-
         pc_raw = classification_report(
             y_te, y_pred, labels=labels, zero_division=0, output_dict=True,
         )

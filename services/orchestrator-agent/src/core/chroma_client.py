@@ -5,7 +5,11 @@ import json
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
-from core.config import CHROMA_SIMILARITY_THRESHOLD
+import chromadb
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+from core.config import CHROMA_HOST, CHROMA_PORT, CHROMA_SIMILARITY_THRESHOLD
 from log.logger import logger
 
 _diagnosis_collection = None
@@ -19,11 +23,6 @@ def _get_collections():
         return _diagnosis_collection, _treatment_collection
 
     try:
-        import chromadb
-        from langchain_chroma import Chroma
-        from langchain_openai import OpenAIEmbeddings
-        from core.config import CHROMA_HOST, CHROMA_PORT
-
         chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 

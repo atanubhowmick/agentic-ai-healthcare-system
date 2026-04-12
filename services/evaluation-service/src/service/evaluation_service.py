@@ -13,70 +13,70 @@ from graph.xai_aggregate_report_graph_gnerator import generate_xai_aggregate_rep
 from graph.xai_statistical_report_graph_gnerator import generate_xai_statistical_report_graphs
 from log.logger import logger
 
-_tfidf_lock    = threading.Lock()
-_tfidf_running = False
+_cancer_agent_lock    = threading.Lock()
+_cancer_agent_running = False
 
 _xai_lock    = threading.Lock()
 _xai_running = False
 
 
-def start_tfidf_evaluation(max_cases: int, test_size: float = 0.20) -> None:
+def start_cancer_agent_evaluation(max_cases: int, test_size: float = 0.20) -> None:
     """
-    Launch a TF-IDF baseline evaluation in a background thread.
+    Launch a Cancer Agent evaluation in a background thread.
     Raises EvaluationSvcException if a run is already in progress.
     """
-    global _tfidf_running
+    global _cancer_agent_running
 
-    with _tfidf_lock:
-        if _tfidf_running:
+    with _cancer_agent_lock:
+        if _cancer_agent_running:
             raise EvaluationSvcException(
-                "TFIDF_EVAL_ALREADY_RUNNING",
-                "A TF-IDF baseline evaluation is already in progress.",
+                "CANCER_AGENT_EVAL_ALREADY_RUNNING",
+                "A Cancer Agent evaluation is already in progress.",
             )
-        _tfidf_running = True
+        _cancer_agent_running = True
 
     thread = threading.Thread(
-        target=_run_tfidf_evaluation,
+        target=_run_cancer_agent_evaluation,
         args=(max_cases, test_size),
         daemon=True,
     )
     thread.start()
-    logger.info("[TFIDF SERVICE] Background evaluation thread started | max_cases=%s | test_size=%.0f%%",
+    logger.info("[CANCER AGENT SERVICE] Background evaluation thread started | max_cases=%s | test_size=%.0f%%",
                 max_cases or "all", test_size * 100)
 
 
-def get_tfidf_status() -> dict:
-    """Return TF-IDF run state and whether a report exists."""
+def get_cancer_agent_report_status() -> dict:
+    """Return Cancer Agent evaluation run state and whether a report exists."""
     return {
-        "running":          _tfidf_running,
+        "running":          _cancer_agent_running,
         "report_available": has_tfidf_report(),
     }
 
 
-def get_tfidf_report() -> dict | None:
-    """Return the most recent TF-IDF baseline report from MongoDB."""
+def get_cancer_agent_report() -> dict | None:
+    """Return the most recent Cancer Agent evaluation report from MongoDB."""
     return load_latest_tfidf_report()
 
 
-def _run_tfidf_evaluation(max_cases: int, test_size: float = 0.20) -> None:
-    global _tfidf_running
+def _run_cancer_agent_evaluation(max_cases: int, test_size: float = 0.20) -> None:
+    global _cancer_agent_running
     try:
         evaluator = TfidfBaselineEvaluator(test_size=test_size)
         evaluator.run_evaluation(max_cases=max_cases)
-        logger.info("[TFIDF SERVICE] Evaluation complete.")
+        logger.info("[CANCER AGENT SERVICE] Evaluation complete.")
         try:
             generate_cancer_agent_aggregate_report_graphs()
         except Exception as agg_exc:
-            logger.warning("[TFIDF SERVICE] Aggregate graph generation failed: %s", agg_exc)
+            logger.warning("[CANCER AGENT SERVICE] Aggregate graph generation failed: %s", agg_exc)
         try:
             generate_cancer_agent_statistical_report_graphs()
         except Exception as stat_exc:
-            logger.warning("[TFIDF SERVICE] Statistical graph generation failed: %s", stat_exc)
+            logger.warning("[CANCER AGENT SERVICE] Statistical graph generation failed: %s", stat_exc)
     except Exception as exc:
-        logger.error("[TFIDF SERVICE] Evaluation failed: %s", exc)
+        logger.error("[CANCER AGENT SERVICE] Evaluation failed: %s", exc)
     finally:
-        with _tfidf_lock:
-            _tfidf_running = False
+        with _cancer_agent_lock:
+            _cancer_agent_running = False
 
 
 def start_xai_evaluation(

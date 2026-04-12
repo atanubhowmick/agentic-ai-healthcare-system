@@ -2,6 +2,12 @@
 # historical cases for a given patient query, for injection into the LLM prompt as RAG context.
 
 from typing import List
+
+import chromadb
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+from core.config import CHROMA_HOST, CHROMA_PORT, MIMIC_COLLECTION_NAME
 from log.logger import logger
 
 _collection = None
@@ -14,11 +20,6 @@ def _get_collection():
         return _collection
 
     try:
-        import chromadb
-        from langchain_chroma import Chroma
-        from langchain_openai import OpenAIEmbeddings
-        from core.config import CHROMA_HOST, CHROMA_PORT, MIMIC_COLLECTION_NAME
-
         chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
         _collection = Chroma(

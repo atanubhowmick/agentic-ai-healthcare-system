@@ -120,7 +120,7 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8003 --reload
 
 ### Prerequisites
 
-- MongoDB running with MIMIC-IV evaluation records loaded (run `scripts/extract_evaluation_dataset.py`)
+- MongoDB running with MIMIC-IV records loaded (run `scripts/load_mimic_mongo.py`)
 - ChromaDB running on port 8020 with the `mimic_cancer_cases` collection populated (run `scripts/load_mimic_data.py`)
 - `OPENAI_API_KEY` set in environment or `.env`
 
@@ -132,7 +132,7 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8003 --reload
 | `OPENAI_API_KEY` | — | Required |
 | `MONGO_URI` | `mongodb://127.0.0.1:27017` | MongoDB connection string |
 | `MONGO_DB` | `agentic_ai_healthcare_db` | Database name |
-| `MONGO_EVAL_COLLECTION` | `mimic_evaluation_cases` | Collection holding MIMIC-IV records |
+| `MONGO_MIMIC_COLLECTION` | `mimic_iv_records` | Collection holding MIMIC-IV records |
 | `CHROMA_HOST` | `127.0.0.1` | ChromaDB host |
 | `CHROMA_PORT` | `8020` | ChromaDB port |
 | `MIMIC_SIMILARITY_THRESHOLD` | `0.75` | Min cosine similarity for high-confidence RAG context |
@@ -150,7 +150,8 @@ services/cancer-agent/
 ├── run.sh
 ├── scripts/
 │   ├── load_mimic_data.py             # Load MIMIC-IV oncology cases into ChromaDB
-│   └── extract_evaluation_dataset.py  # Load MIMIC-IV records into MongoDB
+│   ├── load_mimic_mongo.py            # Load MIMIC-IV records into MongoDB
+│   └── train_models.py                # Train TF-IDF models and save to pickle for XAI SHAP
 └── src/
     ├── main.py                        # FastAPI app entry point
     ├── agent/

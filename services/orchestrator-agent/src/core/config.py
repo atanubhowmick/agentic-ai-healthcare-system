@@ -22,8 +22,9 @@ XAI_SERVICE_URL = os.getenv(
     "XAI_SERVICE_URL", "http://127.0.0.1:8016/xai-validator"
 )
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://127.0.0.1:27017")
-MONGO_DB = os.getenv("MONGO_DB", "agentic_ai_healthcare_db")
+MONGO_URI                  = os.getenv("MONGO_URI",                  "mongodb://127.0.0.1:27017")
+MONGO_DB                   = os.getenv("MONGO_DB",                   "agentic_ai_healthcare_db")
+MONGO_PATIENT_RECORDS_COLLECTION = os.getenv("MONGO_PATIENT_RECORDS_COLLECTION", "patient_diagnosis_treatment_records")
 
 CHROMA_HOST = os.getenv("CHROMA_HOST", "127.0.0.1")
 CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8020"))
