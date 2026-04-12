@@ -173,8 +173,11 @@ mongosh --eval "db.adminCommand('ping')"
 
 | Collection | Used By | Purpose |
 |------------|---------|---------|
-| `mimic_cases` | Cancer Agent, Evaluation Service | MIMIC-IV patient records for TF-IDF training and evaluation |
-| `evaluation_reports` | Evaluation Service | Persisted XAI evaluation run results |
+| `mimic_iv_records` | Cancer Agent, Evaluation Service | MIMIC-IV patient records for TF-IDF training and XAI evaluation |
+| `cancer_agent_report` | Evaluation Service | Cancer Agent TF-IDF evaluation reports |
+| `xai_evaluation_reports` | Evaluation Service | XAI validation evaluation reports |
+| `xai_validation_rules` | XAI Validation Service | Clinical safety rules (seeded from JSON, overridden by MongoDB) |
+| `patient_diagnosis_treatment_records` | Orchestrator Agent | Completed patient cases persisted after full pipeline run |
 
 ### Reusing locally stored data with Docker
 

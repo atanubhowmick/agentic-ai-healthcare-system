@@ -1,6 +1,6 @@
 # Extracts MIMIC-IV cancer cases from BigQuery and saves them to MongoDB (mimic_iv_records).
 # The collection is consumed by two pipelines in the evaluation-service:
-#   - TF-IDF baseline evaluator  : trains HistGBM / LogisticRegression / LinearSVC classifiers
+#   - Cancer Agent evaluator     : trains HistGBM / LogisticRegression / LinearSVC classifiers
 #   - XAI evaluator              : sends cases through the XAI validation service for metrics
 #
 # SQL includes admission_type and has_icu_stay (via ICU join), which load_mimic_data.py omits.

@@ -1,12 +1,12 @@
 # Evaluation Service
 
-Metrics and evaluation service — port **8017**. Loads MIMIC-IV cases from MongoDB and runs them through the XAI validation service and a TF-IDF baseline to measure clinical safety, explainability quality, and classifier performance.
+Metrics and evaluation service — port **8017**. Loads MIMIC-IV cases from MongoDB and runs them through the XAI validation service and a Cancer Agent TF-IDF to measure clinical safety, explainability quality, and classifier performance.
 
 ---
 
 ## Evaluations
 
-### TF-IDF Baseline (`POST /evaluate/tfidf-baseline`)
+### Cancer Agent Evaluation (`POST /evaluate/cancer-agent`)
 
 Trains TF-IDF + classifier models on MIMIC-IV cases and reports metrics on a held-out test split. Provides a classical ML reference for comparison against the LLM-based cancer agent. Note that TF-IDF is supervised (trained on MIMIC data) while the LLM agent is zero-shot — that asymmetry is intentional.
 
@@ -39,13 +39,13 @@ Both evaluations run in a background thread. Poll the `/status` endpoint for pro
 
 ## API
 
-### TF-IDF endpoints
+### Cancer Agent endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/evaluate/tfidf-baseline` | Start a TF-IDF evaluation |
-| `GET` | `/evaluate/tfidf-baseline/status` | Check if running / report available |
-| `GET` | `/evaluate/tfidf-baseline/report` | Fetch the latest report |
+| `POST` | `/evaluate/cancer-agent` | Start a Cancer Agent evaluation |
+| `GET` | `/evaluate/cancer-agent/status` | Check if running / report available |
+| `GET` | `/evaluate/cancer-agent/report` | Fetch the latest report |
 
 **Request body**
 ```json
