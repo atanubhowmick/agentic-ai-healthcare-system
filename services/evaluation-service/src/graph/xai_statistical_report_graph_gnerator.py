@@ -10,6 +10,8 @@ if _SRC not in sys.path:
 
 import argparse
 
+import matplotlib
+matplotlib.use("Agg")  # non-interactive backend — required for use outside the main thread
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import (
