@@ -10,29 +10,27 @@ LangGraph master agent — port **8015**. Accepts a patient case and runs the fu
 POST /orchestrator/diagnose
         │
         ▼
-  chroma_lookup ──── cache hit (similarity ≥ 0.85) ────────────────────────┐
-        │ miss                                                               │
-        ▼                                                                    │
-  classifier (4-tier hybrid)                                                 │
-        │                                                                    │
-        ▼                                                                    │
-  specialist_node (cardiology / neurology / cancer / pathology)             │
-        │                                                                    │
-        ├── secondary_check_needed → pathology cross-check → conflict_check │
-        │                                                                    │
-        ▼                                                                    │
-  xai_diagnosis_validator ◄──── retry loop (max 3×) ────────────────────┐  │
-        │ validated                                                       │  │
-        ▼                                                                 │  │
-  treatment_node                                                          │  │
-        │                                                                 │  │
-        ▼                                                                 │  │
-  xai_treatment_validator ◄──── retry loop (max 3×) ─────────────────┐  │  │
-        │ validated                                                    │  │  │
-        ▼                                                              │  │  │
-      finish ◄──────────────────────────────────────────────────────────┘  │
-        │                                                                   │
-        └───────────────────────────────────────────────────────────────────┘
+  chroma_lookup ──── cache hit (similarity ≥ 0.85) ───────────────────────────────┐
+        │ miss                                                                    │
+        ▼                                                                         │
+  classifier (4-tier hybrid)                                                      │
+        │                                                                         │
+        ▼                                                                         │
+  specialist_node (cardiology / neurology / cancer / pathology) ──────────────┐   │
+        │                                                                     │   │
+        ├── secondary_check_needed → pathology cross-check → conflict_check   │   │
+        │                                                                     │   │
+        ▼                                                                     │   │
+  xai_diagnosis_validator ◄─────────────── fail: retry (max 3×) ──────────────┘   │
+        │ pass                                                                    │
+        ▼                                                                         │
+  treatment_node ──────────────────────────────────────────────────────────────┐  │
+        │                                                                      │  │
+        ▼                                                                      │  │
+  xai_treatment_validator ◄─────────────── fail: retry (max 3×) ───────────────┘  │
+        │ pass                                                                    │
+        ▼                                                                         │
+      finish ◄────────────────────────────────────────────────────────────────────┘
         │
         ▼
   MongoDB save + ChromaDB cache update (non-blocking)

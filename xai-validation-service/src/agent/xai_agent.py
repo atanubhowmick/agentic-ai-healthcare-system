@@ -6,7 +6,10 @@ from core.config import OPENAI_MODEL
 from explainers.shap_provider import DiagnosisExplainer
 from explainers import context as explanation_context
 from log.logger import logger
-from validators.medical_rules import check_emergency_consistency, check_severity_validity
+from validators.medical_rules import (
+    check_emergency_consistency as _check_emergency_consistency,
+    check_severity_validity as _check_severity_validity,
+)
 
 
 _JSON_SCHEMA = """
@@ -87,7 +90,7 @@ def check_emergency_consistency(symptoms: str, severity: str, emergency_care: st
         severity: Severity level from the specialist diagnosis (LOW/HIGH/CRITICAL).
         emergency_care: Emergency care flag from the specialist diagnosis (YES/NO).
     """
-    is_ok, message = check_emergency_consistency(symptoms, severity, emergency_care)
+    is_ok, message = _check_emergency_consistency(symptoms, severity, emergency_care)
     status = "CONSISTENT" if is_ok else "INCONSISTENT"
     logger.debug("[XAI_TOOL] Emergency consistency: %s | %s", status, message)
     return f"Status: {status}\nMessage: {message}"
@@ -101,7 +104,7 @@ def check_severity_validity(severity: str) -> str:
     Args:
         severity: Severity level string to validate.
     """
-    is_ok, message = check_severity_validity(severity)
+    is_ok, message = _check_severity_validity(severity)
     status = "VALID" if is_ok else "INVALID"
     logger.debug("[XAI_TOOL] Severity validity: %s | %s", status, message)
     return f"Status: {status}\nMessage: {message}"

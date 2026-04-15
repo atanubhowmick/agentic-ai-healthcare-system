@@ -168,6 +168,11 @@ class TfidfPredictor:
                 return
             self._train()
 
+    @property
+    def is_ready(self) -> bool:
+        """True once training has completed (non-blocking check)."""
+        return self._trained
+
     def _train(self) -> None:
         logger.info("[TFIDF_PRED] Loading MIMIC evaluation records from MongoDB...")
         client  = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5_000)
@@ -291,8 +296,18 @@ class TfidfPredictor:
 
     def predict(self, symptoms: str) -> dict:
         """Predict structured diagnosis fields from symptom text.
-        ICD codes and has_icu_stay default to empty/0 — not available at inference time."""
-        self.ensure_trained()
+        ICD codes and has_icu_stay default to empty/0 — not available at inference time.
+        Returns conservative defaults immediately if models are still training."""
+        if not self.is_ready:
+            logger.warning("[TFIDF_PRED] Models not yet ready — returning safe defaults (warm-up in progress)")
+            return {
+                "severity":               "HIGH",
+                "severityConfidence":     50,
+                "emergencyCareNeeded":    "NO",
+                "emergencyCareConfidence": 50,
+                "hospitalizationNeeded":  "YES",
+                "suspectedCancerType":    "Unknown",
+            }
 
         # Safe defaults (conservative: assume hospitalisation needed, uncertain emergency)
         result: dict = {

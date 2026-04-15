@@ -51,6 +51,53 @@ def _get_collections():
     return _diagnosis_collection, _treatment_collection
 
 
+async def lookup_diagnosis_outcome(symptoms: str) -> Tuple[bool, Optional[dict]]:
+    """
+    Search diagnosis_outcomes for a semantically similar prior case.
+
+    Returns:
+        (True, cached_result)  - if similarity >= CHROMA_SIMILARITY_THRESHOLD
+        (False, None)          - otherwise
+    """
+    diagnosis_col, _ = _get_collections()
+    if diagnosis_col is None:
+        return False, None
+
+    try:
+        results = diagnosis_col.similarity_search_with_relevance_scores(
+            query=symptoms,
+            k=1,
+        )
+        if not results:
+            logger.info("[CHROMA] diagnosis_outcomes: no documents yet")
+            return False, None
+
+        doc, score = results[0]
+        logger.info("[CHROMA] Best diagnosis match | similarity: %.4f | threshold: %.2f", score, CHROMA_SIMILARITY_THRESHOLD)
+
+        if score >= CHROMA_SIMILARITY_THRESHOLD:
+            metadata = doc.metadata
+            cached_result = {
+                "source": "chroma_cache",
+                "similarity_score": round(score, 4),
+                "specialist_agent": metadata.get("specialist_agent"),
+                "diagnosis": json.loads(metadata.get("diagnosis_json", "{}")),
+                "severity": metadata.get("severity", "N/A"),
+            }
+            logger.info(
+                "[CHROMA] Diagnosis cache hit | similarity: %.4f | specialist: %s",
+                score, metadata.get("specialist_agent"),
+            )
+            return True, cached_result
+
+        logger.info("[CHROMA] No sufficient diagnosis match | best similarity: %.4f", score)
+        return False, None
+
+    except Exception as e:
+        logger.warning("[CHROMA] Diagnosis lookup error (non-blocking): %s", str(e))
+        return False, None
+
+
 async def lookup_treatment_recommendation(symptoms: str) -> Tuple[bool, Optional[dict]]:
     """
     Search treatment_outcomes for a semantically similar prior case.
@@ -86,16 +133,16 @@ async def lookup_treatment_recommendation(symptoms: str) -> Tuple[bool, Optional
                 "treatment": json.loads(metadata.get("treatment_json", "{}")),
             }
             logger.info(
-                "[CHROMA] Cache hit | similarity: %.4f | specialist: %s",
+                "[CHROMA] Treatment cache hit | similarity: %.4f | specialist: %s",
                 score, metadata.get("specialist_agent"),
             )
             return True, cached_result
 
-        logger.info("[CHROMA] No sufficient match | best similarity: %.4f", score)
+        logger.info("[CHROMA] No sufficient treatment match | best similarity: %.4f", score)
         return False, None
 
     except Exception as e:
-        logger.warning("[CHROMA] Lookup error (non-blocking): %s", str(e))
+        logger.warning("[CHROMA] Treatment lookup error (non-blocking): %s", str(e))
         return False, None
 
 
@@ -150,7 +197,7 @@ async def save_treatment_outcome(
         metadata = {
             "patient_id": patient_id,
             "specialist_agent": specialist_agent,
-            "diagnosis_summary": str(diagnosis_summary)[:500],   # keep metadata compact
+            "diagnosis_summary": str(diagnosis_summary)[:500],
             "severity": diagnosis.get("severity", "UNKNOWN"),
             "treatment_json": json.dumps(treatment),
             "saved_at": datetime.now(timezone.utc).isoformat(),

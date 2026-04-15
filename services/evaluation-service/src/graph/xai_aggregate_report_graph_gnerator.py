@@ -9,6 +9,8 @@ _SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
+import matplotlib
+matplotlib.use("Agg")  # non-interactive backend — required for use outside the main thread
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np 

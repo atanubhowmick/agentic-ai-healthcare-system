@@ -18,21 +18,55 @@ import argparse
 import os
 import sys
 
+import pymongo
 from google.cloud import bigquery
+from pymongo import MongoClient
 
 # Allow running from scripts/ or repo root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
-# Allow importing evaluation-service mongo_client
-_eval_service_src = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "../../evaluation-service/src")
-)
-sys.path.insert(0, _eval_service_src)
-
-from core.mongo_client import save_evaluation_cases  # type: ignore[import]  # runtime sys.path
+from core.config import MONGO_URI, MONGO_DB, MONGO_MIMIC_COLLECTION  # cancer-agent config
 from log.logger import logger
 from load_mimic_data import _process_row  # re-use existing row processor
+
+_mongo_client: MongoClient | None = None
+
+
+def _get_mongo_collection():
+    global _mongo_client
+    if _mongo_client is None:
+        _mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5_000)
+        logger.info("[MONGO] Connected to %s / %s", MONGO_URI, MONGO_DB)
+    return _mongo_client[MONGO_DB][MONGO_MIMIC_COLLECTION]
+
+
+def save_evaluation_cases(records: list[dict]) -> int:
+    """Bulk-upsert evaluation records on (subject_id, hadm_id). Returns upserted count."""
+    if not records:
+        logger.warning("[MONGO] save_evaluation_cases called with empty list — nothing saved.")
+        return 0
+
+    col = _get_mongo_collection()
+    col.create_index(
+        [("subject_id", pymongo.ASCENDING), ("hadm_id", pymongo.ASCENDING)],
+        unique=True,
+        background=True,
+    )
+    ops = [
+        pymongo.UpdateOne(
+            {"subject_id": rec.get("subject_id"), "hadm_id": rec.get("hadm_id")},
+            {"$set": rec},
+            upsert=True,
+        )
+        for rec in records
+    ]
+    result = col.bulk_write(ops, ordered=False)
+    logger.info(
+        "[MONGO] Upserted %d | modified %d | total processed %d",
+        result.upserted_count, result.modified_count, len(records),
+    )
+    return result.upserted_count + result.modified_count
 
 
 def _process_mimic_row(row: dict) -> dict | None:
