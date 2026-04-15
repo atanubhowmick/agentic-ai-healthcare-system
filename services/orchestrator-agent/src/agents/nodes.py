@@ -16,6 +16,7 @@ from core.config import MAX_RETRY_COUNT, OPENAI_MODEL
 from agents.classifier_router import route_symptoms
 from core.mongo_client import save_case
 from core.chroma_client import (
+    lookup_diagnosis_outcome,
     lookup_treatment_recommendation,
     save_diagnosis_outcome,
     save_treatment_outcome,
@@ -67,63 +68,78 @@ def _diagnosis_summary(diagnosis: dict) -> str:
 
 async def chroma_lookup_node(state: AgentState) -> dict:
     """
-    Searches ChromaDB treatment_outcomes for a semantically similar prior case.
-    On cache hit, builds a pre-filled final_response and short-circuits to finish.
+    Looks up both diagnosis_outcomes and treatment_outcomes collections independently.
+    Only short-circuits to finish when BOTH collections return a cache hit above the
+    similarity threshold. A partial hit (one collection only) is treated as a miss
+    and the full pipeline runs normally.
     """
     symptoms = state.get("symptoms", "")
     patient_id = state.get("patient_id", "UNKNOWN")
 
-    logger.info("[CHROMA_LOOKUP] Checking cache | patient: %s", patient_id)
+    logger.info("[CHROMA_LOOKUP] Checking diagnosis + treatment cache | patient: %s", patient_id)
 
-    hit, cached = await lookup_treatment_recommendation(symptoms)
+    diag_hit, cached_diag = await lookup_diagnosis_outcome(symptoms)
+    treat_hit, cached_treat = await lookup_treatment_recommendation(symptoms)
 
-    if hit:
-        score = cached.get("similarity_score", 0.0)
-        specialist = cached.get("specialist_agent", "Unknown")
-        logger.info("[CHROMA_LOOKUP] Cache hit | patient: %s | similarity: %.4f", patient_id, score)
+    if diag_hit and treat_hit:
+        diag_score = cached_diag.get("similarity_score", 0.0)
+        treat_score = cached_treat.get("similarity_score", 0.0)
+        specialist = cached_diag.get("specialist_agent", "Unknown")
+        logger.info(
+            "[CHROMA_LOOKUP] Both cache hits | patient: %s | diag: %.4f | treat: %.4f",
+            patient_id, diag_score, treat_score,
+        )
 
+        cached_diagnosis = cached_diag.get("diagnosis") or {}
         final_response = {
             "patient_id": patient_id,
             "status": "COMPLETED_FROM_CACHE",
             "specialist_agent": specialist,
             "diagnosis": {
-                "summary": cached.get("diagnosis_summary", "Cached result - see treatment"),
-                "severity": cached.get("severity", "N/A"),
-                "emergency_care_needed": "N/A",
-                "hospitalization_needed": "N/A",
-                "full_details": {},
+                "summary": _diagnosis_summary(cached_diagnosis),
+                "severity": cached_diagnosis.get("severity") or cached_diag.get("severity", "N/A"),
+                "emergency_care_needed": cached_diagnosis.get("emergencyCareNeeded", "N/A"),
+                "hospitalization_needed": cached_diagnosis.get("hospitalizationNeeded", "N/A"),
+                "full_details": cached_diagnosis,
             },
             "xai_diagnosis_validation": None,
-            # Wrap in the same envelope the treatment agent returns so the UI
-            # can render it identically to a non-cached response.
             "treatment": {
                 "agent": "Treatment_Care_Agent",
                 "agent_id": "TREAT-AGENT-CACHE",
-                "treatment": cached.get("treatment"),
+                "treatment": cached_treat.get("treatment"),
             },
             "xai_treatment_validation": None,
             "conflict_detected": False,
             "conflict_reason": "",
             "human_review_reason": None,
             "audit_trail": [
-                f"[CHROMA_LOOKUP] Cache hit (similarity={score}) "
-                "- returning cached treatment recommendation"
+                f"[CHROMA_LOOKUP] Diagnosis cache hit (similarity={diag_score}) + "
+                f"Treatment cache hit (similarity={treat_score}) - returning cached response"
             ],
         }
         return {
             "chroma_cache_hit": True,
-            "chroma_cached_result": cached,
+            "chroma_cached_result": {"diagnosis": cached_diag, "treatment": cached_treat},
             "final_response": final_response,
             "messages": [
-                f"[CHROMA_LOOKUP] Cache hit | similarity: {score} - skipping full diagnosis pipeline"
+                f"[CHROMA_LOOKUP] Both cache hits | diag: {diag_score} | treat: {treat_score} "
+                "- skipping full pipeline"
             ],
         }
 
-    logger.info("[CHROMA_LOOKUP] No cache hit | patient: %s - proceeding with full pipeline", patient_id)
+    # Partial or full miss — log which collection(s) missed and run the full pipeline
+    if not diag_hit and not treat_hit:
+        miss_reason = "No hit in diagnosis_outcomes or treatment_outcomes"
+    elif not diag_hit:
+        miss_reason = "No hit in diagnosis_outcomes (treatment hit ignored)"
+    else:
+        miss_reason = "No hit in treatment_outcomes (diagnosis hit ignored)"
+
+    logger.info("[CHROMA_LOOKUP] %s | patient: %s - proceeding with full pipeline", miss_reason, patient_id)
     return {
         "chroma_cache_hit": False,
         "chroma_cached_result": None,
-        "messages": ["[CHROMA_LOOKUP] No cache hit - proceeding with full diagnosis flow"],
+        "messages": [f"[CHROMA_LOOKUP] {miss_reason} - proceeding with full diagnosis flow"],
     }
 
 
