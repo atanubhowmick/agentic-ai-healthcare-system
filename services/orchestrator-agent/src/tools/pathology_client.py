@@ -1,6 +1,7 @@
 import httpx
 from langchain.tools import tool
 from core.config import PATHOLOGY_SERVICE_URL, HTTP_TIMEOUT
+from core.tracing import trace_headers
 from log.logger import logger
 
 
@@ -19,6 +20,6 @@ async def call_pathology_api(patient_id: str, symptoms: str, is_followup: bool =
     logger.debug("[pathology_client] POST %s | patient: %s | followup: %s", url, patient_id, is_followup)
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        response = await client.post(url, json=payload)
+        response = await client.post(url, json=payload, headers=trace_headers())
         response.raise_for_status()
         return response.json()

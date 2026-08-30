@@ -204,6 +204,37 @@ docker-compose up --build
 
 ---
 
+## Observability — LangSmith Tracing
+
+Seven services participate in a shared LangSmith project so a single patient case — orchestrator → specialist agent → XAI validator → treatment agent — shows up as **one connected trace tree**, not disconnected per-service traces: Cardiology, Neurology, Cancer, Pathology, Treatment, Orchestrator, and the XAI Validation Service.
+
+### How distributed tracing works
+
+Each of the seven services adds `LangSmithTracingMiddleware` (`src/core/tracing.py`) to its FastAPI app. On an incoming request, the middleware checks for a `langsmith-trace` header:
+- **Present** (the call came from another traced service) → the middleware continues that trace via `tracing_context(parent=...)`, so this service's LLM/tool/graph runs nest under the caller's run.
+- **Absent** (e.g. the orchestrator receiving a request from Patient UI) → this service's own invocation becomes a new root trace.
+
+Every run is also tagged with the service name (e.g. `cardiology-agent`) so runs can be filtered within the shared project.
+
+The orchestrator is the only service that calls sibling agent services over HTTP (`src/tools/*_client.py`). Each outbound call attaches `trace_headers()` (`src/core/tracing.py`), which reads the currently active LangSmith run via `get_current_run_tree()` and serializes it to the `langsmith-trace` / `baggage` headers the receiving service's middleware picks up.
+
+No code changes are needed to trace individual LLM calls — LangChain/LangGraph/DeepAgents auto-instrument every `ChatOpenAI` call, tool invocation, and graph node once tracing is enabled via environment variables.
+
+### Enabling tracing
+
+Set these on the seven services (already wired into `docker-compose.yml`; export them before `docker-compose up`, or add to each service's `.env` when running locally):
+
+| Variable | Default | Description |
+|---|---|---|
+| `LANGSMITH_TRACING` | `false` | Set `true` to enable tracing |
+| `LANGSMITH_API_KEY` | — | Your LangSmith API key |
+| `LANGSMITH_PROJECT` | `agentic-ai-healthcare-system` | Shared project — must be identical across all services so a case appears as one trace |
+| `LANGSMITH_ENDPOINT` | `https://api.smith.langchain.com` | LangSmith API endpoint (change for EU/self-hosted) |
+
+Tracing is off by default (`LANGSMITH_TRACING=false`) and has no effect on request/response behaviour when disabled — `Evaluation Service` and `Patient UI` are excluded, since neither makes LLM calls in the live diagnosis pipeline.
+
+---
+
 ## Project Structure
 
 ```
@@ -216,7 +247,7 @@ agentic-ai-healthcare-system/
 │   │   └── src/
 │   │       ├── agent/              # DeepAgent executor + @tool (cardiology_agent.py)
 │   │       ├── api/                # FastAPI router (server.py)
-│   │       ├── core/               # config.py - OPENAI_DEFAULT_MODEL env var
+│   │       ├── core/               # config.py, tracing.py (LangSmith middleware) - OPENAI_DEFAULT_MODEL env var
 │   │       ├── datamodel/          # Pydantic request/response models
 │   │       ├── exception/          # CardiologySvcException + handler
 │   │       ├── service/            # Business logic (cardiology_service.py)
@@ -229,7 +260,7 @@ agentic-ai-healthcare-system/
 │   │   └── src/
 │   │       ├── agent/              # DeepAgent executor + @tool (neurology_agent.py)
 │   │       ├── api/                # FastAPI router (server.py)
-│   │       ├── core/               # config.py - OPENAI_DEFAULT_MODEL env var
+│   │       ├── core/               # config.py, tracing.py (LangSmith middleware) - OPENAI_DEFAULT_MODEL env var
 │   │       ├── datamodel/          # Pydantic request/response models
 │   │       ├── exception/          # NeurologySvcException + handler
 │   │       ├── service/            # Business logic (neurology_service.py)
@@ -246,7 +277,7 @@ agentic-ai-healthcare-system/
 │   │   └── src/
 │   │       ├── agent/              # DeepAgent + @tool: search_mimic_cases (cancer_agent.py)
 │   │       ├── api/                # FastAPI router (server.py)
-│   │       ├── core/               # config.py - OPENAI_DEFAULT_MODEL, CHROMA_*, MONGO_* env vars
+│   │       ├── core/               # config.py, tracing.py (LangSmith middleware) - OPENAI_DEFAULT_MODEL, CHROMA_*, MONGO_* env vars
 │   │       ├── datamodel/          # Pydantic request/response models
 │   │       ├── exception/          # CancerSvcException + handler
 │   │       ├── rag/                # MIMIC-IV ChromaDB retriever + TF-IDF predictor
@@ -261,7 +292,7 @@ agentic-ai-healthcare-system/
 │   │       ├── agent/              # DeepAgent executor + @tool (pathology_agent.py)
 │   │       ├── api/                # FastAPI router (server.py)
 │   │       ├── constant/           # constants.py - PATHOLOGY_AGENT_ID
-│   │       ├── core/               # config.py - OPENAI_DEFAULT_MODEL env var
+│   │       ├── core/               # config.py, tracing.py (LangSmith middleware) - OPENAI_DEFAULT_MODEL env var
 │   │       ├── datamodel/          # Pydantic request/response models
 │   │       ├── exception/          # PathologySvcException + handler
 │   │       ├── service/            # Business logic (pathology_service.py)
@@ -274,6 +305,7 @@ agentic-ai-healthcare-system/
 │   │   └── src/
 │   │       ├── agent/              # LangChain LLM executor (treatment_agent.py)
 │   │       ├── api/                # FastAPI router (server.py)
+│   │       ├── core/               # tracing.py (LangSmith middleware)
 │   │       ├── datamodel/          # Pydantic request/response models
 │   │       ├── exception/          # TreatmentSvcException + handler
 │   │       ├── service/            # Business logic (treatment_service.py)
@@ -286,7 +318,7 @@ agentic-ai-healthcare-system/
 │   │   └── src/
 │   │       ├── agents/             # LangGraph graph, nodes, state, classifier router
 │   │       ├── api/                # FastAPI router (server.py)
-│   │       ├── core/               # config.py, chroma_client.py, mongo_client.py
+│   │       ├── core/               # config.py, chroma_client.py, mongo_client.py, tracing.py (LangSmith middleware + trace_headers())
 │   │       ├── exception/          # OrchestratorSvcException + handler
 │   │       ├── schemas/            # Shared request/response schemas
 │   │       ├── tools/              # HTTP client wrappers for specialist agents + XAI
@@ -314,6 +346,7 @@ agentic-ai-healthcare-system/
 │   ├── requirements.txt
 │   └── src/
 │       ├── api/                    # FastAPI router (server.py)
+│       ├── core/                   # tracing.py (LangSmith middleware)
 │       ├── datamodel/              # Validation request/response models
 │       ├── exception/              # ValidationSvcException + handler
 │       ├── explainers/             # SHAP-based explainability (shap_provider.py)

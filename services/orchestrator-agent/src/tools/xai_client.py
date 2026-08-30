@@ -1,6 +1,7 @@
 import httpx
 from langchain.tools import tool
 from core.config import XAI_SERVICE_URL, HTTP_TIMEOUT
+from core.tracing import trace_headers
 from log.logger import logger
 
 
@@ -30,7 +31,7 @@ async def call_validate_diagnosis(
     logger.debug("[xai_client] POST %s | patient: %s | specialist: %s", url, patient_id, specialist_agent)
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        response = await client.post(url, json=payload)
+        response = await client.post(url, json=payload, headers=trace_headers())
         response.raise_for_status()
         return response.json()
 
@@ -64,6 +65,6 @@ async def call_validate_treatment(
     logger.debug("[xai_client] POST %s | patient: %s", url, patient_id)
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        response = await client.post(url, json=payload)
+        response = await client.post(url, json=payload, headers=trace_headers())
         response.raise_for_status()
         return response.json()

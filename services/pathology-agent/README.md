@@ -86,6 +86,9 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8011 --reload
 |---|---|---|
 | `OPENAI_DEFAULT_MODEL` | `gpt-5.2` | LLM model used by the agent |
 | `OPENAI_API_KEY` | — | Required. Set in your environment or a `.env` file |
+| `LANGSMITH_TRACING` | `false` | Set `true` to enable LangSmith tracing |
+| `LANGSMITH_API_KEY` | — | Required when `LANGSMITH_TRACING=true` |
+| `LANGSMITH_PROJECT` | `agentic-ai-healthcare-system` | Shared project name — see root [README](../../README.md#observability--langsmith-tracing) for distributed tracing details |
 
 ---
 

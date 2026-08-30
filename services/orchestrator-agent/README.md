@@ -157,6 +157,9 @@ All downstream services must be running before the orchestrator starts:
 | `RULE_MIN_KEYWORD_HITS` | `4` | Tier 1: min total keyword hits |
 | `BIOBERT_CONFIDENCE_THRESHOLD` | `0.80` | Tier 2: min NLI entailment score |
 | `CLINICAL_CONFIDENCE_THRESHOLD` | `0.80` | Tier 3: min softmax probability |
+| `LANGSMITH_TRACING` | `false` | Set `true` to enable LangSmith tracing |
+| `LANGSMITH_API_KEY` | — | Required when `LANGSMITH_TRACING=true` |
+| `LANGSMITH_PROJECT` | `agentic-ai-healthcare-system` | Shared project name — see root [README](../../README.md#observability--langsmith-tracing) for distributed tracing details |
 
 ---
 

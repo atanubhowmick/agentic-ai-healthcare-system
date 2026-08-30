@@ -138,6 +138,9 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8003 --reload
 | `MIMIC_SIMILARITY_THRESHOLD` | `0.75` | Min cosine similarity for high-confidence RAG context |
 | `MIMIC_PARTIAL_THRESHOLD` | `0.60` | Min cosine similarity for low-confidence RAG context |
 | `MIMIC_TOP_K` | `3` | Number of MIMIC cases to retrieve per query |
+| `LANGSMITH_TRACING` | `false` | Set `true` to enable LangSmith tracing |
+| `LANGSMITH_API_KEY` | — | Required when `LANGSMITH_TRACING=true` |
+| `LANGSMITH_PROJECT` | `agentic-ai-healthcare-system` | Shared project name — see root [README](../../README.md#observability--langsmith-tracing) for distributed tracing details |
 
 ---
 
