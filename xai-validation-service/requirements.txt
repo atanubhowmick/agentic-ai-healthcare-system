@@ -9,6 +9,9 @@ langchain>=1.2.12
 langchain-core>=1.2.20
 langchain-openai>=1.1.10
 
+# LangSmith - tracing / observability
+langsmith>=0.3.0
+
 # LangGraph
 langgraph>=1.1.2
 

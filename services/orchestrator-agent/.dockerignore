@@ -1,0 +1,12 @@
+venv/
+clinicalbert_router/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+.git/
+.gitignore
+*.egg-info/

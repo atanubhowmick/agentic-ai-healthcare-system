@@ -141,6 +141,9 @@ uvicorn main:app --app-dir ./src --host 127.0.0.1 --port 8016 --reload
 | `CHROMA_PORT` | `8020` | ChromaDB port |
 | `MONGODB_URI` | `mongodb://localhost:27017` | MongoDB connection string |
 | `MONGODB_DB_NAME` | `agentic_ai_healthcare_db` | Database name |
+| `LANGSMITH_TRACING` | `false` | Set `true` to enable LangSmith tracing |
+| `LANGSMITH_API_KEY` | — | Required when `LANGSMITH_TRACING=true` |
+| `LANGSMITH_PROJECT` | `agentic-ai-healthcare-system` | Shared project name — see root [README](../README.md#observability--langsmith-tracing) for distributed tracing details |
 
 ---
 

@@ -42,6 +42,10 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-agentic-ai-healthcare-system}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     networks:
       - healthcare-net
 
@@ -53,6 +57,10 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-agentic-ai-healthcare-system}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     networks:
       - healthcare-net
 
@@ -66,6 +74,10 @@ services:
       - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-agentic-ai-healthcare-system}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     depends_on:
       chromadb:
         condition: service_started
@@ -80,6 +92,10 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-agentic-ai-healthcare-system}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     networks:
       - healthcare-net
 
@@ -91,6 +107,10 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-5.2}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-agentic-ai-healthcare-system}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     networks:
       - healthcare-net
 
@@ -116,6 +136,10 @@ services:
       - CHROMA_PORT=8000
       - CHROMA_SIMILARITY_THRESHOLD=0.90
       - MAX_RETRY_COUNT=3
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-agentic-ai-healthcare-system}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -131,6 +155,10 @@ services:
       - "8016:8016"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-agentic-ai-healthcare-system}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     networks:
       - healthcare-net
 

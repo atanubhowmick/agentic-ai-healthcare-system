@@ -10,6 +10,9 @@ langchain-core>=1.2.20
 langchain-openai>=1.1.10
 langchain-community>=0.4.1
 
+# LangSmith - tracing / observability
+langsmith>=0.3.0
+
 # LangGraph - agentic graph runtime
 langgraph>=1.1.2
 

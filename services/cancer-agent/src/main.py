@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI
 from api.server import router
 from exception.exception_handler import register_exception_handlers
+from core.tracing import LangSmithTracingMiddleware
 from rag.tfidf_predictor import warm_up
 from log.logger import logger
 
@@ -22,5 +23,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Cancer Oncology Specialist Service", lifespan=lifespan)
 
+app.add_middleware(LangSmithTracingMiddleware, service_name="cancer-agent")
 register_exception_handlers(app)
 app.include_router(router)
